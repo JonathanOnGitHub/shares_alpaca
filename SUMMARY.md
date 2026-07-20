@@ -37,19 +37,19 @@ Predicts next-day returns using an ensemble of LSTM, XGBoost, and Ridge models t
 
 When run through the full 9-check diligence suite, the ensemble scores only 4/9:
 
-| Check | Ensemble ML | Momentum LS |
-|---|---|---|
-| vs B&H | **FAIL** (5.3% vs 13.6%) | **FAIL** (6.4% vs 26.1%) |
-| Best Month Exclusion | PASS (82% from 1 month) | PASS (57% from 1 month) |
-| Win Rate | PASS (59%) | **FAIL** (47%) |
-| Max DD | PASS (-1.1%) | PASS (-41%) |
-| Monthly Consistency | **FAIL** (too few months) | PASS (80% windows) |
-| Concentration | PASS | PASS |
-| Sub-Period | **FAIL** | **FAIL** |
-| Sharpe Significance | **FAIL** (too few months) | PASS |
-| Permutation Test | **FAIL** (31st percentile) | **FAIL** (35th percentile) |
+| Check | Ensemble ML | Momentum LS | Trend (30yr) |
+|---|---|---|---|---|
+| vs B&H | **FAIL** (5.3% vs 13.6%) | **FAIL** (6.4% vs 26.1%) | **FAIL** (142% vs 676%) |
+| Best Month | PASS (82% from 1m) | PASS (57% from 1m) | PASS (39% from 1m) |
+| Win Rate | PASS (59%) | **FAIL** (47%) | PASS (55%) |
+| Max DD | PASS (-1.1%) | PASS (-41%) | **FAIL** (-57%, 7yr) |
+| Monthly Consistency | **FAIL** | PASS (80%) | PASS (59%) |
+| Concentration | PASS | PASS | PASS |
+| Sub-Period | **FAIL** | **FAIL** | PASS |
+| Sharpe Significance | **FAIL** | PASS | PASS |
+| Permutation Test | **FAIL** (31st) | **FAIL** (35th) | **FAIL** (19th) |
 
-Neither strategy survives the diligence gauntlet. The ensemble's best feature is low drawdown (-1.1%) but it lags buy-and-hold and can't distinguish itself from random noise (31st percentile). **No strategy tested is ready for live capital.**
+All three strategies fail the permutation test, and none beats buy-and-hold. **No strategy tested is ready for live capital.**
 
 ## Experiment 2: Cross-Sectional Momentum
 
@@ -97,6 +97,7 @@ Rebalances monthly via cron: `.venv/bin/python -m src.trading.momentum_forward -
 | `src/trading/pead_overlay.py` | Post-earnings drift overlay strategy |
 | `src/trading/momentum.py` | Cross-sectional momentum backtester |
 | `src/trading/momentum_forward.py` | Live forward momentum trading (cron-ready) |
+| `src/trading/trend.py` | Multi-asset trend-following (CTA-style) |
 | `src/pipeline.py` | End-to-end pipeline |
 | `src/validation/diligence.py` | Reusable diligence/validation suite (8 checks) |
 | `SUMMARY.md` | This file |
@@ -126,7 +127,7 @@ print(report.summary())
 
 | # | Check | What it tests | Pass Condition |
 |---|---|---|---|
-| 1 | vs Equal-Weight B&H | Beats holding all stocks equally | Strategy return > EW return |
+| 1 | vs Equal-Weight B&H | Beats holding all assets equally | Strategy return > EW return |
 | 2 | Best Month Exclusion | Survives removing the single best month | Return stays positive |
 | 3 | Win Rate | Wins more than it loses (trade or monthly) | Win rate > 50% |
 | 4 | Max Drawdown Duration | Drawdown severity and recovery | DD > -50%, recovery < 2yr |
@@ -134,23 +135,19 @@ print(report.summary())
 | 6 | Trade Concentration | Any single trade dominates PnL | Largest trade < 50% of total |
 | 7 | Sub-Period Consistency | First half vs second half of test period | Both halves positive or 2nd not terrible |
 | 8 | Sharpe Significance | Sharpe ratio vs noise threshold | Sharpe > 2/√(N) |
+| 9 | Permutation Test | Strategy return vs 500 random return shuffles | Beats ≥ 95% of random trials |
 
-### Momentum Strategy Score: 8/9 → 1/9 (honest config)
+### Strategy Scores
 
-The long-only momentum variant (bottom_n=0) scores 8/9 but the permutation test flags the signal as indistinguishable from random (66th percentile). The **long/short variant** (bottom_n=5, matching the walk-forward test) tells the true story:
+All three strategies in the registry have been run through the full suite:
 
-| Check | Result |
-|---|---|
-| vs Equal-Weight B&H | **FAIL** — lags simple B&H |
-| Best Month Exclusion | **FAIL** — 712% of return from 1 month |
-| Trade Win Rate | PASS (55%) |
-| Max Drawdown | PASS (-41%) |
-| Monthly Consistency | **FAIL** — rolling windows inconsistent |
-| Trade Concentration | PASS |
-| Sub-Period Consistency | **FAIL** — negative in both halves |
-| Sharpe Significance | **FAIL** — too few months |
-| Permutation Test | **FAIL** — indistinguishable from random |
+| Strategy | Score | Fails |
+|---|---|---|
+| Momentum small-cap (long-only) | 8/9 | Permutation (66th percentile) |
+| Momentum small-cap (long/short) | 5/9 | vs B&H, Win Rate, Sub-Period, Permutation |
+| ML Ensemble (mega-cap) | 4/9 | vs B&H, Monthly, Sub-Period, Sharpe, Permutation |
+| **Trend-following (30yr multi-asset)** | **6/9** | **vs B&H, Max DD, Permutation (19th)** |
 
-**Effective score: 2/9 on the checks that matter.** The momentum strategy fails every critical test — it doesn't beat B&H, its entire return comes from one month, and it can't distinguish itself from random noise. Kept as a validation harness only.
+**No strategy beats buy-and-hold** or passes the permutation test — neither can distinguish itself from random allocation. The trend strategy has the best overall score (6/9) but its 19th percentile on the permutation test means a random portfolio of the same assets beats it 81% of the time.
 
 The module provides an instant reality check for any proposed strategy before live deployment.

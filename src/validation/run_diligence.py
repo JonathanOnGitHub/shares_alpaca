@@ -14,9 +14,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+import yfinance as yf
 
 from src.data.alpaca_client import AlpacaClient
 from src.trading.momentum import CrossSectionalMomentum
+from src.trading.trend import TrendFollowing
 from src.validation.diligence import DiligenceSuite
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -53,6 +55,16 @@ STRATEGY_CONFIGS = {
         "symbols_config": "config/config.yaml",
         "params": {},
     },
+    "trend_multiasset": {
+        "type": "trend",
+        "params": {
+            "lookback_days": [126, 252],
+            "vol_target": 0.15,
+            "vol_lookback": 63,
+            "smoothing": "average",
+            "max_position_pct": 0.2,
+        },
+    },
 }
 
 
@@ -67,11 +79,10 @@ def run(strategy_name: str) -> dict:
         raise ValueError(f"Unknown strategy '{strategy_name}'. Options: {list(STRATEGY_CONFIGS)}")
 
     spec = STRATEGY_CONFIGS[strategy_name]
-    symbols = load_symbols(spec["symbols_config"])
-
     client = AlpacaClient()
 
     if spec["type"] == "momentum":
+        symbols = load_symbols(spec["symbols_config"])
         data = client.get_bars(symbols, timeframe="Day", lookback_days=1000)
         data = {s: df for s, df in data.items() if not df.empty and len(df) > 300}
         strategy = CrossSectionalMomentum(spec["params"])
@@ -87,6 +98,7 @@ def run(strategy_name: str) -> dict:
         )
 
     elif spec["type"] == "ensemble":
+        symbols = load_symbols(spec["symbols_config"])
         from src.backtest.engine import BacktestEngine
         from src.features.technical import FeatureEngineer
         from src.models.ensemble import EnsembleModel
@@ -148,6 +160,39 @@ def run(strategy_name: str) -> dict:
             equity_curve=result.equity_curve,
             trades=result.trades,
             prices={s: bars[s] for s in predictions},
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "trend":
+        assets = {
+            'SPY': 'Equities', 'QQQ': 'Equities', 'IWM': 'Equities',
+            'TLT': 'Bonds', 'IEF': 'Bonds', 'SHY': 'Bonds',
+            'LQD': 'Bonds', 'HYG': 'Bonds',
+            'GLD': 'Commodities', 'SLV': 'Commodities',
+            'USO': 'Commodities', 'DBC': 'Commodities',
+            'UUP': 'Currencies', 'FXE': 'Currencies',
+            'VNQ': 'Real Estate',
+            'XLU': 'Sectors', 'XLV': 'Sectors', 'XLK': 'Sectors',
+        }
+        prices = {}
+        for sym in assets:
+            h = yf.Ticker(sym).history(period='max')
+            if h is not None and len(h) > 2000:
+                prices[sym] = h['Close']
+        pf = pd.DataFrame(prices)
+        if hasattr(pf.index, 'tz') and pf.index.tz is not None:
+            pf.index = pf.index.tz_localize(None)
+        pf = pf.dropna(how='all')
+
+        strategy = TrendFollowing(spec["params"])
+        result = strategy.backtest(pf)
+
+        prices_map = {s: pd.DataFrame({'close': pf[s]}, index=pf.index) for s in pf.columns}
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=prices_map,
+            config=spec["params"],
             strategy_name=strategy_name,
         )
 
