@@ -98,8 +98,12 @@ Rebalances monthly via cron: `.venv/bin/python -m src.trading.momentum_forward -
 | `src/trading/momentum.py` | Cross-sectional momentum backtester |
 | `src/trading/momentum_forward.py` | Live forward momentum trading (cron-ready) |
 | `src/trading/trend.py` | Multi-asset trend-following (CTA-style) |
+| `src/trading/merger_arb.py` | Merger arbitrage strategy (in progress) |
+| `src/data/edgar.py` | SEC EDGAR 8-K filing fetcher |
+| `src/data/lm_dictionary.csv` | Loughran-McDonald financial sentiment dictionary |
+| `src/features/sentiment.py` | L-M sentiment analyzer |
 | `src/pipeline.py` | End-to-end pipeline |
-| `src/validation/diligence.py` | Reusable diligence/validation suite (8 checks) |
+| `src/validation/diligence.py` | Reusable diligence/validation suite (9 checks) |
 | `SUMMARY.md` | This file |
 
 ## DiligenceSuite — Reusable Validation Harness
@@ -151,3 +155,33 @@ All three strategies in the registry have been run through the full suite:
 **No strategy beats buy-and-hold** or passes the permutation test — neither can distinguish itself from random allocation. The trend strategy has the best overall score (6/9) but its 19th percentile on the permutation test means a random portfolio of the same assets beats it 81% of the time.
 
 The module provides an instant reality check for any proposed strategy before live deployment.
+
+## Merger Arbitrage — In Progress
+
+Building a merger arbitrage strategy using SEC EDGAR 8-K filings and Loughran-McDonald sentiment analysis.
+
+### Current State (2026-07-20)
+
+- ✅ **EDGAR fetcher** (`src/data/edgar.py`): Downloads and parses 8-K filings. Rate-limited to comply with SEC rules. CIK lookup working.
+- ✅ **LM sentiment analyzer** (`src/features/sentiment.py`): Dictionary downloaded (~170 positive, ~560 negative financial words). Analyzes filing tone.
+- ✅ **Pipeline works end-to-end**: Fetches 8-Ks for a ticker, detects merger-related content, scores sentiment.
+- ❌ **Deal detection too broad**: "MERGER" keyword catches routine filings (debt programs, buybacks). Need precise M&A identification.
+- ❌ **No structured deal extraction**: Can't yet extract target company ticker, offer price per share, or expected close date.
+- ❌ **No outcome tracking**: Need to determine if deals completed or failed.
+- ❌ **No merger arb strategy yet**: The backtest logic hasn't been built.
+
+### Next Steps
+
+1. **Refine merger detection**: Use specific patterns ("Agreement and Plan of Merger", "Definitive Agreement" + "Merger") rather than broad keyword search. Cross-reference with company names to identify actual M&A.
+2. **Extract structured deal data**: Parse target ticker, offer price ($X per share), and expected close date from filing text using regex patterns.
+3. **Track deal outcomes**: Cross-reference subsequent filings to determine if deals closed or failed.
+4. **Build merger arb strategy**: Trade the spread between current price and offer price, with position sizing based on deal confidence (LM sentiment as risk signal).
+5. **Run through diligence suite**: Add to `run_diligence.py` registry and test against the 9 checks.
+
+### Data Sources
+
+| Source | Access | Coverage |
+|---|---|---|
+| SEC EDGAR | Free, unlimited (rate-limited) | All US exchange filings since 1994 |
+| L-M Dictionary | Free (publicly available) | Financial sentiment word lists |
+| FMP (explored, not used) | Free tier too limited | Only 5 most recent M&A deals |
