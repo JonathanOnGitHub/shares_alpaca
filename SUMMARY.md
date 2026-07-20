@@ -88,4 +88,47 @@ Rebalances monthly. Cron-ready: `.venv/bin/python -m src.trading.momentum_forwar
 | `src/trading/momentum.py` | Cross-sectional momentum backtester |
 | `src/trading/momentum_forward.py` | Live forward momentum trading (cron-ready) |
 | `src/pipeline.py` | End-to-end pipeline |
+| `src/validation/diligence.py` | Reusable diligence/validation suite (8 checks) |
 | `SUMMARY.md` | This file |
+
+## DiligenceSuite — Reusable Validation Module
+
+`src/validation/diligence.py` provides 8 standard diligence checks for any strategy backtest.
+
+### Usage
+
+```python
+from src.validation.diligence import DiligenceSuite
+
+suite = DiligenceSuite(
+    equity_curve=result.equity_curve,
+    trades=result.trades,
+    prices=price_data,
+    strategy_name="My Strategy",
+)
+report = suite.run_all()
+print(report.summary())
+```
+
+### The 8 Checks
+
+| # | Check | What it tests | Pass Condition |
+|---|---|---|---|
+| 1 | vs Equal-Weight B&H | Beats holding all stocks equally | Strategy return > EW return |
+| 2 | Best Month Exclusion | Survives removing the single best month | Return stays positive |
+| 3 | Win Rate | Wins more than it loses (trade or monthly) | Win rate > 50% |
+| 4 | Max Drawdown Duration | Drawdown severity and recovery | DD > -50%, recovery < 2yr |
+| 5 | Monthly Consistency | Fraction of rolling 6-month windows positive | > 50% positive + Sharpe > 0 |
+| 6 | Trade Concentration | Any single trade dominates PnL | Largest trade < 50% of total |
+| 7 | Sub-Period Consistency | First half vs second half of test period | Both halves positive or 2nd not terrible |
+| 8 | Sharpe Significance | Sharpe ratio vs noise threshold | Sharpe > 2/√(N) |
+
+### Momentum Strategy Score: 3/8
+
+Applied to the small-cap 12-month momentum strategy, the diligence checks revealed:
+- **Lags B&H** (-17.1% vs -11.5%) — destroys capital vs simple holding
+- **712% of return from 1 month** — without July 2026 the strategy loses 14.9%
+- **Monthly Sharpe 0.08** — effectively zero risk-adjusted return
+- **Negative in both halves** — consistently bad, not just unlucky
+
+The module provides an instant reality check for any proposed strategy before live deployment.
