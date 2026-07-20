@@ -1,0 +1,78 @@
+{
+  "strategy": "ensemble_mega",
+  "passed": 4,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "False",
+      "detail": "Strategy 5.3% vs B&H 13.6%",
+      "metrics": {
+        "Strategy Return": "5.28%",
+        "B&H Return": "13.60%",
+        "Strategy Sharpe": "4.56",
+        "B&H Sharpe": "2.12"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (4.8%): 1.1% (total: 5.9%)",
+      "metrics": {
+        "Best Month": "4.78%",
+        "Return (all)": "5.90%",
+        "Return (excl)": "1.06%",
+        "Attributed to 1 month": "82%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "19/32 winning trades (59%)",
+      "metrics": {
+        "Win Rate": "59.4%",
+        "Trades": "32"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": true,
+      "detail": "Max DD: -1.1%, longest streak: 22 days",
+      "metrics": {
+        "Max DD": "-1.10%",
+        "Longest DD Days": "22"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": false,
+      "detail": "Need >6 months",
+      "metrics": {}
+    },
+    "Trade Concentration": {
+      "passed": "True",
+      "detail": "Top 1 trade: 19% of total PnL, Top 3: 49%",
+      "metrics": {
+        "Top Trade Share": "18.9%",
+        "Top 3 Share": "48.5%",
+        "Total Trades": "32"
+      }
+    },
+    "Sub-Period Consistency": {
+      "passed": false,
+      "detail": "Too little data",
+      "metrics": {}
+    },
+    "Sharpe Significance": {
+      "passed": false,
+      "detail": "Need >12 months",
+      "metrics": {}
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (5.3%) beats 31% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "5.28%",
+        "Random Median": "15.45%",
+        "Percentile Rank": "31.4%"
+      }
+    }
+  },
+  "timestamp_utc": "20260720T192040Z",
+  "params": {}
+}

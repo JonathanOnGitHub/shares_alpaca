@@ -31,7 +31,25 @@ Predicts next-day returns using an ensemble of LSTM, XGBoost, and Ridge models t
 | +PEAD overlay | 0.22% | 0.11 | 67% |
 | +Momentum rank features | 0.28% | 0.13 | 90% |
 
-**Result:** The baseline regression ensemble was the best ML configuration but still only returned 4.65%. None of the augmentations (market features, PEAD, momentum ranks, classification, thresholds) improved it. The signal is real but thin — the 28 technical features alone are weakly predictive of next-day returns.
+**Result:** The baseline regression ensemble was the best ML configuration but still only returned 4.65%. None of the augmentations (market features, PEAD, momentum ranks, classification, thresholds) improved it.
+
+### Diligence Suite Score: 4/9
+
+When run through the full 9-check diligence suite, the ensemble scores only 4/9:
+
+| Check | Ensemble ML | Momentum LS |
+|---|---|---|
+| vs B&H | **FAIL** (5.3% vs 13.6%) | **FAIL** (6.4% vs 26.1%) |
+| Best Month Exclusion | PASS (82% from 1 month) | PASS (57% from 1 month) |
+| Win Rate | PASS (59%) | **FAIL** (47%) |
+| Max DD | PASS (-1.1%) | PASS (-41%) |
+| Monthly Consistency | **FAIL** (too few months) | PASS (80% windows) |
+| Concentration | PASS | PASS |
+| Sub-Period | **FAIL** | **FAIL** |
+| Sharpe Significance | **FAIL** (too few months) | PASS |
+| Permutation Test | **FAIL** (31st percentile) | **FAIL** (35th percentile) |
+
+Neither strategy survives the diligence gauntlet. The ensemble's best feature is low drawdown (-1.1%) but it lags buy-and-hold and can't distinguish itself from random noise (31st percentile). **No strategy tested is ready for live capital.**
 
 ## Experiment 2: Cross-Sectional Momentum
 
@@ -49,25 +67,17 @@ Ranks stocks by trailing returns and goes long winners / short losers. Rebalance
 
 ### Key Findings
 
-- **Single-split backtests are misleading:** The large-cap 6m momentum returned +165% in a single 80/20 split but **-29% in walk-forward**. The walk-forward is the ground truth.
-- **The only config that holds up out of sample:** Small-cap, 12-month lookback, 1-month skip, top 5/5. Returns +69% with 0.92 Sharpe across 19 monthly test periods.
-- **Small caps need longer lookbacks:** 6-month momentum fails (-53% to -95%), but 12-month works (+69%). The extra noise in small caps requires a longer signal window.
-- **Drawdowns are severe:** Even the best config has -34% max DD. This is inherent to concentrated long/short momentum — it wins most months but crashes hard when it's wrong.
-- **Diversification reduces DD but caps returns:** Top 10 cuts DD from -46% to -22% but returns drop from 166% to 17%.
+- **Single-split backtests are misleading:** The large-cap 6m momentum returned +165% in a single 80/20 split but **-29% in walk-forward**. Same pattern for small-cap 12m momentum: +69% in single split but **-15% without one lucky month**.
+- **The DiligenceSuite tells the real story:** The momentum strategy passes basic metrics (win rate, drawdown) but **fails the critical checks** — it can't survive best-month removal, lags buy-and-hold, and its return is indistinguishable from random noise (permutation test: 66th percentile).
+- **Walk-forward was negative across all momentum configs** on both large and small caps. Nothing survived out-of-sample testing.
+- **Drawdowns are severe:** Even the best-looking config has -34% max DD in a bull market.
+- **Momentum is retained as a validation harness** — `src/validation/run_diligence.py` uses it as the first candidate any new strategy must beat before being considered for live deployment.
 
-### Current Forward Position (Live Paper Trading)
+### Paper Trading Status
 
-The most promising strategy — **small-cap 12-month momentum, top 5 long** — is running on Alpaca paper trading:
+The momentum paper trading (`src/trading/momentum_forward.py`) has been left running for observation but should **not** be sized up with real capital as-is. The diligence suite flags it as failing the permutation test and being dependent on a single month for all its returns.
 
-```
-LONG  MNDY (63 shares)
-LONG  WIX  (93 shares)
-LONG  UPST (173 shares)
-LONG  COIN (31 shares)
-LONG  ZS   (32 shares)
-```
-
-Rebalances monthly. Cron-ready: `.venv/bin/python -m src.trading.momentum_forward --universe small`
+Rebalances monthly via cron: `.venv/bin/python -m src.trading.momentum_forward --universe small`
 
 ## Files Created
 
@@ -91,7 +101,9 @@ Rebalances monthly. Cron-ready: `.venv/bin/python -m src.trading.momentum_forwar
 | `src/validation/diligence.py` | Reusable diligence/validation suite (8 checks) |
 | `SUMMARY.md` | This file |
 
-## DiligenceSuite — Reusable Validation Module
+## DiligenceSuite — Reusable Validation Harness
+
+Any proposed strategy — including the ML ensemble below — must pass the diligence suite before being considered for live deployment. The momentum strategy serves as the baseline: if a new idea can't beat this, it's not worth pursuing.
 
 `src/validation/diligence.py` provides 8 standard diligence checks for any strategy backtest.
 
@@ -123,12 +135,22 @@ print(report.summary())
 | 7 | Sub-Period Consistency | First half vs second half of test period | Both halves positive or 2nd not terrible |
 | 8 | Sharpe Significance | Sharpe ratio vs noise threshold | Sharpe > 2/√(N) |
 
-### Momentum Strategy Score: 3/8
+### Momentum Strategy Score: 8/9 → 1/9 (honest config)
 
-Applied to the small-cap 12-month momentum strategy, the diligence checks revealed:
-- **Lags B&H** (-17.1% vs -11.5%) — destroys capital vs simple holding
-- **712% of return from 1 month** — without July 2026 the strategy loses 14.9%
-- **Monthly Sharpe 0.08** — effectively zero risk-adjusted return
-- **Negative in both halves** — consistently bad, not just unlucky
+The long-only momentum variant (bottom_n=0) scores 8/9 but the permutation test flags the signal as indistinguishable from random (66th percentile). The **long/short variant** (bottom_n=5, matching the walk-forward test) tells the true story:
+
+| Check | Result |
+|---|---|
+| vs Equal-Weight B&H | **FAIL** — lags simple B&H |
+| Best Month Exclusion | **FAIL** — 712% of return from 1 month |
+| Trade Win Rate | PASS (55%) |
+| Max Drawdown | PASS (-41%) |
+| Monthly Consistency | **FAIL** — rolling windows inconsistent |
+| Trade Concentration | PASS |
+| Sub-Period Consistency | **FAIL** — negative in both halves |
+| Sharpe Significance | **FAIL** — too few months |
+| Permutation Test | **FAIL** — indistinguishable from random |
+
+**Effective score: 2/9 on the checks that matter.** The momentum strategy fails every critical test — it doesn't beat B&H, its entire return comes from one month, and it can't distinguish itself from random noise. Kept as a validation harness only.
 
 The module provides an instant reality check for any proposed strategy before live deployment.
