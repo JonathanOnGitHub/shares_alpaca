@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from src.backtest.engine import Trade
+
 
 class CrossSectionalMomentum:
     def __init__(self, config: dict):
@@ -46,6 +48,8 @@ class CrossSectionalMomentum:
         holding_days = self.holding_months * 21
         portfolio_returns = []
         dates_run = []
+        trades: list[Trade] = []
+        capital = 100_000.0
 
         for i in range(len(signals) - 1):
             entry_date = signals.index[i]
@@ -60,8 +64,31 @@ class CrossSectionalMomentum:
                 portfolio_returns.append(ret)
                 dates_run.append(date)
 
+            # Build one round-trip Trade per active symbol per rebalance
+            # period so the diligence suite can assess win rate and
+            # concentration, not just the aggregate equity curve.
+            for sym in active_symbols:
+                entry_price = prices[sym].asof(entry_date)
+                exit_price = prices[sym].asof(exit_date)
+                if pd.isna(entry_price) or pd.isna(exit_price) or entry_price == 0:
+                    continue
+                w = weights[sym]
+                position_value = capital * abs(w)
+                shares = position_value / entry_price
+                direction = 1 if w > 0 else -1
+                pnl = direction * shares * (exit_price - entry_price)
+                trades.append(Trade(
+                    date=entry_date, symbol=sym, side="buy",
+                    price=entry_price, shares=shares, value=position_value,
+                ))
+                trades.append(Trade(
+                    date=exit_date, symbol=sym, side="sell",
+                    price=exit_price, shares=shares, value=shares * exit_price,
+                    pnl=pnl,
+                ))
+
         if not portfolio_returns:
-            return {"total_return": 0, "sharpe": 0, "trades": 0}
+            return {"total_return": 0, "sharpe": 0, "trades": 0, "trade_log": []}
 
         equity = pd.Series(portfolio_returns, index=dates_run)
         cumulative = (1 + equity).cumprod()
@@ -79,4 +106,5 @@ class CrossSectionalMomentum:
             "max_drawdown": max_dd,
             "num_trades": len(signals) * (self.top_n + self.bottom_n),
             "equity_curve": cumulative,
+            "trade_log": trades,
         }
