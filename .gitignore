@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.joblib
+.ipynb_checkpoints/
+tensorflow/
+.tf_keras/
+*.so
+/tmp/
+*.egg-info/

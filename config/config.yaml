@@ -1,0 +1,77 @@
+data:
+  symbols:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - SPY
+  timeframe: Day  # Day, Hour, Minute
+  lookback_days: 1000
+  train_split: 0.8
+
+features:
+  pead:
+    enabled: true
+    drift_window: 20
+    min_surprise_pct: 2.0
+    max_signal: 0.02
+  momentum:
+    enabled: true
+    rank_windows: [21, 63, 126, 252]  # 1, 3, 6, 12 months
+    skip_window: 21  # exclude last month to avoid reversal
+  price_features:
+    - returns
+    - log_returns
+    - high_low_pct
+    - close_open_pct
+  technical_indicators:
+    sma: [5, 10, 20, 50]
+    ema: [5, 10, 20]
+    rsi: [14]
+    macd: [12, 26, 9]
+    bollinger: [20, 2]
+    atr: [14]
+
+models:
+  mode: regression  # regression or classification
+  lstm:
+    enabled: true
+    sequence_length: 30
+    hidden_units: [64, 32]
+    dropout: 0.2
+    epochs: 10
+    batch_size: 32
+    learning_rate: 0.001
+  xgboost:
+    enabled: true
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+  linear:
+    enabled: true
+
+ensemble:
+  weights:
+    lstm: 0.4
+    xgboost: 0.4
+    linear: 0.2
+
+trading:
+  initial_capital: 100000
+  max_position_pct: 0.1
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.05
+  max_open_positions: 5
+  rebalance_frequency: daily
+  slippage_pct: 0.001
+  commission_pct: 0.0
+  min_signal_threshold: 0.002
+  max_trades_per_day: 0  # max total trades per day; 0 = unlimited
+
+backtest:
+  walk_forward:
+    initial_train_size: 250
+    test_size: 40
+    step_size: 40

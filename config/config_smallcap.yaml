@@ -1,0 +1,80 @@
+data:
+  symbols:
+    - AEO
+    - ANF
+    - BOOT
+    - CROX
+    - DKS
+    - FIVE
+    - OLLI
+    - CHWY
+    - CVNA
+    - COIN
+    - HOOD
+    - SOFI
+    - PLTR
+    - MRNA
+    - NET
+  timeframe: Day
+  lookback_days: 1000
+  train_split: 0.8
+
+features:
+  pead:
+    enabled: false
+  momentum:
+    enabled: false
+  price_features:
+    - returns
+    - log_returns
+    - high_low_pct
+    - close_open_pct
+  technical_indicators:
+    sma: [5, 20]
+    ema: [5, 20]
+    rsi: [14]
+    macd: [12, 26, 9]
+    bollinger: [20, 2]
+    atr: [14]
+
+models:
+  mode: regression
+  lstm:
+    enabled: true
+    sequence_length: 20
+    hidden_units: [32, 16]
+    dropout: 0.2
+    epochs: 10
+    batch_size: 16
+    learning_rate: 0.001
+  xgboost:
+    enabled: true
+    n_estimators: 100
+    max_depth: 4
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+  linear:
+    enabled: true
+  weights:
+    lstm: 0.4
+    xgboost: 0.4
+    linear: 0.2
+
+trading:
+  initial_capital: 100000
+  max_position_pct: 0.1
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.05
+  max_open_positions: 5
+  rebalance_frequency: daily
+  slippage_pct: 0.001
+  commission_pct: 0.0
+  min_signal_threshold: 0.0
+  max_trades_per_day: 0
+
+backtest:
+  walk_forward:
+    initial_train_size: 200
+    test_size: 30
+    step_size: 30
