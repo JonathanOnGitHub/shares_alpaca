@@ -1,0 +1,104 @@
+{
+  "strategy": "swing_smallcap",
+  "passed": 6,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "False",
+      "detail": "Strategy 24.9% vs B&H 155.4%",
+      "metrics": {
+        "Strategy Return": "24.90%",
+        "B&H Return": "155.41%",
+        "Strategy Sharpe": "0.88",
+        "B&H Sharpe": "0.84"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (5.8%): 18.1% (total: 24.9%)",
+      "metrics": {
+        "Best Month": "5.78%",
+        "Return (all)": "24.90%",
+        "Return (excl)": "18.07%",
+        "Attributed to 1 month": "27%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": false,
+      "detail": "17/41 winning trades (41%)",
+      "metrics": {
+        "Win Rate": "41.5%",
+        "Trades": "41"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": true,
+      "detail": "Max DD: -9.2%, longest streak: 423 days",
+      "metrics": {
+        "Max DD": "-9.19%",
+        "Longest DD Days": "423"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "35/44 rolling 6m windows positive, monthly Sharpe: 0.24",
+      "metrics": {
+        "Positive 6m Windows": "35/44 (80%)",
+        "Monthly Sharpe": "0.24"
+      }
+    },
+    "Trade Concentration": {
+      "passed": "True",
+      "detail": "Top 1 trade: 8% of total PnL, Top 3: 21%",
+      "metrics": {
+        "Top Trade Share": "7.6%",
+        "Top 3 Share": "20.6%",
+        "Total Trades": "41"
+      }
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 18.9%, Second half: 5.0%",
+      "metrics": {
+        "First Half Return": "18.92%",
+        "Second Half Return": "5.02%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 0.83 vs threshold 0.29 for N=49 months",
+      "metrics": {
+        "Annual Sharpe": "0.83",
+        "Significance Threshold": "0.29"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (24.9%) beats 20% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "24.90%",
+        "Random Median": "215.64%",
+        "Percentile Rank": "19.8%"
+      }
+    }
+  },
+  "timestamp_utc": "20260721T092850Z",
+  "params": {
+    "rsi_period": 14,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "sma_trend": 50,
+    "sma_volume": 20,
+    "volume_avg_multiplier": 1.2,
+    "atr_period": 14,
+    "atr_stop_mult": 2.0,
+    "atr_target_mult": 3.0,
+    "max_holding_days": 15,
+    "min_holding_days": 2,
+    "max_position_pct": 0.2,
+    "max_open_positions": 5,
+    "initial_capital": 100000.0,
+    "slippage_pct": 0.001,
+    "commission_pct": 0.0
+  }
+}

@@ -18,6 +18,7 @@ import yfinance as yf
 
 from src.data.alpaca_client import AlpacaClient
 from src.trading.momentum import CrossSectionalMomentum
+from src.trading.swing import SwingTrading
 from src.trading.trend import TrendFollowing
 from src.validation.diligence import DiligenceSuite
 
@@ -54,6 +55,50 @@ STRATEGY_CONFIGS = {
         "type": "ensemble",
         "symbols_config": "config/config.yaml",
         "params": {},
+    },
+    "swing_mega": {
+        "type": "swing",
+        "symbols_config": "config/config.yaml",
+        "params": {
+            "rsi_period": 14,
+            "rsi_oversold": 35,
+            "rsi_overbought": 65,
+            "sma_trend": 20,
+            "sma_volume": 20,
+            "volume_avg_multiplier": 1.0,
+            "atr_period": 14,
+            "atr_stop_mult": 2.0,
+            "atr_target_mult": 3.0,
+            "max_holding_days": 10,
+            "min_holding_days": 2,
+            "max_position_pct": 0.15,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
+    },
+    "swing_smallcap": {
+        "type": "swing",
+        "symbols_config": "config/config_smallcap.yaml",
+        "params": {
+            "rsi_period": 14,
+            "rsi_oversold": 30,
+            "rsi_overbought": 70,
+            "sma_trend": 50,
+            "sma_volume": 20,
+            "volume_avg_multiplier": 1.2,
+            "atr_period": 14,
+            "atr_stop_mult": 2.0,
+            "atr_target_mult": 3.0,
+            "max_holding_days": 15,
+            "min_holding_days": 2,
+            "max_position_pct": 0.2,
+            "max_open_positions": 5,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
     },
     "trend_multiasset": {
         "type": "trend",
@@ -196,6 +241,22 @@ def run(strategy_name: str) -> dict:
             strategy_name=strategy_name,
         )
 
+    elif spec["type"] == "swing":
+        symbols = load_symbols(spec["symbols_config"])
+        data = client.get_bars(symbols, timeframe="Day", lookback_days=1500)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 300}
+        strategy = SwingTrading(spec["params"])
+        result = strategy.backtest(data)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Swing backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=data,
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
     else:
         raise ValueError(f"Unknown strategy type: {spec['type']}")
 
@@ -217,6 +278,6 @@ def run(strategy_name: str) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--strategy", default="momentum_smallcap", choices=list(STRATEGY_CONFIGS))
+    parser.add_argument("--strategy", default="swing_mega", choices=list(STRATEGY_CONFIGS))
     args = parser.parse_args()
     run(args.strategy)
