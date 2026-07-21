@@ -47,15 +47,31 @@ class EDGARClient:
             return None
 
     def get_8k_filings(self, ticker: str, days: int = 365, quarters_back: int = 8) -> list[dict]:
-        """Get 8-K filing URLs for a ticker over the given lookback period."""
+        """Get parsed 8-K filings for a ticker over the given lookback period."""
         cik = self._ticker_to_cik(ticker)
         if not cik:
             return []
 
-        filings = []
-        match_cik = cik.lstrip("0")
         now = datetime.now()
         start = now - timedelta(days=days)
+        rows = self.list_8k_filings_by_cik(cik, start.strftime("%Y-%m-%d"), quarters_back)
+
+        filings = []
+        for row in rows:
+            filing = self._parse_filing(row["href"])
+            if filing:
+                filing["date"] = row.get("date", "")
+                filings.append(filing)
+        return filings
+
+    def list_8k_filings_by_cik(self, cik: str, start_date: str, quarters_back: int = 8) -> list[dict]:
+        """Return raw 8-K filing rows (date, href) for a CIK since start_date,
+        without running merger-detection parsing on each — used both by
+        get_8k_filings (discovery) and by outcome tracking (which applies
+        its own completion/termination phrase scan instead)."""
+        match_cik = cik.lstrip("0")
+        now = datetime.now()
+        rows_out = []
 
         for q in range(quarters_back):
             total_months_back = q * 3
@@ -74,23 +90,18 @@ class EDGARClient:
                 row_cik = row.get("cik", "").strip().lstrip("0")
                 if (row.get("form") in ("8-K", "8-K/A")
                         and match_cik == row_cik
-                        and row.get("date", "") >= start.strftime("%Y-%m-%d")):
-                    filing = self._parse_filing(row["href"])
-                    if filing:
-                        filing["date"] = row.get("date", "")
-                        filings.append(filing)
+                        and row.get("date", "") >= start_date):
+                    rows_out.append(row)
 
-        return filings
+        return sorted(rows_out, key=lambda r: r.get("date", ""))
 
-    def _ticker_to_cik(self, ticker: str) -> Optional[str]:
+    def _load_cik_map(self) -> dict[str, str]:
+        """Return {ticker: CIK} map, cached locally from SEC company_tickers.json."""
         cache_file = Path(__file__).resolve().parent / "cik_lookup.json"
         if cache_file.exists():
             import json
-            lookup = json.loads(cache_file.read_text())
-            if ticker.upper() in lookup:
-                return lookup[ticker.upper()]
+            return json.loads(cache_file.read_text())
 
-        # Fetch CIK from SEC ticker map
         url = f"{SEC_BASE}/files/company_tickers.json"
         data = self._get(url)
         if data:
@@ -99,8 +110,81 @@ class EDGARClient:
             for entry in json.loads(data).values():
                 lookup[entry["ticker"]] = str(entry["cik_str"]).zfill(10)
             cache_file.write_text(json.dumps(lookup))
-            return lookup.get(ticker.upper())
-        return None
+            return lookup
+        return {}
+
+    def _ticker_to_cik(self, ticker: str) -> Optional[str]:
+        return self._load_cik_map().get(ticker.upper())
+
+    def get_8k_filings_bulk(
+        self, tickers: list[str], days: int = 365, quarters_back: int = 8
+    ) -> dict[str, list[dict]]:
+        """Scan 8-K filings for many tickers at once, loading each quarterly
+        index only once instead of once per ticker.
+
+        This is the method merger arb should use — define a broad universe
+        of potential targets and scan them all efficiently, rather than
+        guessing which single ticker will announce a deal.
+
+        Returns {ticker: [parsed_filing, ...]} for tickers that had any
+        8-Ks in the period (not just merger-related ones — each filing's
+        ``is_merger`` field tells you whether deal language was detected).
+        """
+        lookup = self._load_cik_map()
+        cik_to_ticker: dict[str, str] = {}
+        ticker_to_cik: dict[str, str] = {}
+        for t in tickers:
+            cik = lookup.get(t.upper())
+            if cik:
+                cik_to_ticker[cik] = t.upper()
+                ticker_to_cik[t.upper()] = cik
+
+        if not ticker_to_cik:
+            return {}
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+        start_date = start.strftime("%Y-%m-%d")
+        target_ciks = set(cik_to_ticker.keys())
+
+        rows_by_ticker: dict[str, list[dict]] = {}
+        for q in range(quarters_back):
+            total_months_back = q * 3
+            target_month = now.month - total_months_back
+            yr = now.year
+            while target_month < 1:
+                target_month += 12
+                yr -= 1
+            qtr_num = (target_month - 1) // 3 + 1
+            if yr < 2020 or yr > now.year:
+                break
+            idx = self._get_quarterly_index(yr, qtr_num)
+            if not idx:
+                continue
+            for row in idx:
+                row_cik = row.get("cik", "").strip().lstrip("0")
+                if (row.get("form") not in ("8-K", "8-K/A")
+                        or row_cik not in target_ciks
+                        or row.get("date", "") < start_date):
+                    continue
+                ticker = cik_to_ticker[row_cik]
+                rows_by_ticker.setdefault(ticker, []).append(row)
+
+        for ticker in rows_by_ticker:
+            rows_by_ticker[ticker].sort(key=lambda r: r.get("date", ""))
+
+        result: dict[str, list[dict]] = {}
+        for ticker, rows in rows_by_ticker.items():
+            filings = []
+            for row in rows:
+                filing = self._parse_filing(row["href"])
+                if filing:
+                    filing["date"] = row.get("date", "")
+                    filings.append(filing)
+            if filings:
+                result[ticker] = filings
+
+        return result
 
     def _get_quarterly_index(self, year: int, qtr: int) -> list[dict]:
         url = f"{INDEX_URL}/{year}/QTR{qtr}/form.idx"
@@ -137,45 +221,108 @@ class EDGARClient:
         if not html:
             return None
 
-        text = html.upper()
+        text = self._html_to_text(html)
+        upper = text.upper()
 
-        # Detect merger-related content
-        merger_keywords = [
-            "MERGER AGREEMENT", "AGREEMENT AND PLAN OF MERGER",
-            "ACQUISITION AGREEMENT", "DEFINITIVE AGREEMENT",
-            "MERGER", "TENDER OFFER",
+        # High-precision phrases only. Bare "MERGER", "TENDER OFFER", or
+        # "DEFINITIVE AGREEMENT" are too generic — they show up in routine
+        # risk-factor boilerplate, unrelated debt/buyback filings, and
+        # legal disclaimers on nearly every 8-K. Multi-word deal-specific
+        # phrases are far less prone to false positives.
+        strong_phrases = [
+            "AGREEMENT AND PLAN OF MERGER",
+            "DEFINITIVE MERGER AGREEMENT",
+            "DEFINITIVE AGREEMENT TO ACQUIRE",
+            "DEFINITIVE AGREEMENT TO BE ACQUIRED",
+            "AGREEMENT AND PLAN OF ACQUISITION",
+            "AGREED TO BE ACQUIRED BY",
+            "TENDER OFFER TO PURCHASE ALL",
+            "MERGER SUB",  # near-unambiguous: entity type only created for M&A
         ]
-        is_merger = any(kw in text for kw in merger_keywords)
+        matched = [p for p in strong_phrases if p in upper]
+
+        # Require either 2+ distinct strong phrases, or 1 phrase repeated
+        # multiple times (press-release-style filings restate deal terms
+        # several times; a single incidental mention usually isn't a deal).
+        match_counts = {p: upper.count(p) for p in matched}
+        total_hits = sum(match_counts.values())
+        is_merger = len(matched) >= 2 or total_hits >= 3
 
         result = {
             "url": url,
             "is_merger": is_merger,
-            "text_snippet": html[:5000] if is_merger else "",
+            "confidence": "high" if len(matched) >= 2 else ("medium" if is_merger else "low"),
+            "matched_phrases": matched,
+            "text_snippet": text[:5000] if is_merger else "",
         }
 
         if is_merger:
-            # Try to extract target company name
-            for pattern in [
-                r"PURSUANT TO THE MERGER AGREEMENT[^.]*",
-                r"AGREEMENT AND PLAN OF MERGER[^.]*",
-                r"ACQUIRE\s+([A-Z][A-Z\s.,]+)",
-                r"MERGER\s+(?:WITH|OF)\s+([A-Z][A-Z\s.,]+)",
-            ]:
-                m = re.search(pattern, text)
-                if m:
-                    result["target_hint"] = m.group(0)[:200]
-                    break
-
-            # Try to extract per-share price
-            price_patterns = [
-                r"\$(\d+\.?\d*)\s+PER\s+SHARE",
-                r"(\d+\.?\d*)\s+DOLLARS\s+PER\s+SHARE",
-                r"PURCHASE\s+PRICE[^$]*\$(\d+\.?\d*)",
-            ]
-            for pat in price_patterns:
-                m = re.search(pat, text)
-                if m:
-                    result["offer_price"] = float(m.group(1))
-                    break
+            result["target_hint"] = self._extract_target_hint(upper)
+            price, price_context = self._extract_offer_price(upper, matched)
+            if price is not None:
+                result["offer_price"] = price
+                result["offer_price_context"] = price_context
 
         return result
+
+    @staticmethod
+    def _html_to_text(html: str) -> str:
+        """Strip HTML/XBRL markup so keyword and regex matching runs
+        against readable prose, not tags/attributes (which can both hide
+        real matches split across tags and create false positives inside
+        boilerplate metadata)."""
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "lxml")
+            for tag in soup(["script", "style"]):
+                tag.decompose()
+            return soup.get_text(separator=" ")
+        except Exception:
+            # Fall back to a crude tag strip if parsing fails
+            return re.sub(r"<[^>]+>", " ", html)
+
+    @staticmethod
+    def _extract_target_hint(upper: str) -> Optional[str]:
+        for pattern in [
+            r"AGREEMENT AND PLAN OF MERGER[,\s]+DATED[^,]*,\s+(?:BY AND )?AMONG\s+([A-Z][A-Z\s.,&]+)",
+            r"AGREED TO ACQUIRE\s+([A-Z][A-Z\s.,&]+?)(?:\s+FOR|\s+IN\s+A)",
+            r"TO\s+(?:BE\s+)?ACQUIRE(?:D BY)?\s+([A-Z][A-Z\s.,&]+?)(?:\s+FOR|\.|,)",
+        ]:
+            m = re.search(pattern, upper)
+            if m:
+                return m.group(0)[:200]
+        return None
+
+    @staticmethod
+    def _extract_offer_price(upper: str, matched_phrases: list[str]) -> tuple[Optional[float], Optional[str]]:
+        """Only search for a per-share price within a window around a
+        matched deal phrase, and require nearby deal-consideration context
+        (cash/consideration/purchase price language), rather than taking
+        the first '$X per share' anywhere in the filing — which could be
+        an unrelated dividend, option strike, or fee."""
+        window = 400
+        candidates: dict[float, int] = {}
+        context_by_price: dict[float, str] = {}
+
+        price_patterns = [
+            r"\$\s?(\d+\.\d{2})\s+(?:IN\s+CASH\s+)?PER\s+SHARE",
+            r"\$\s?(\d+\.\d{2})\s+PER\s+SHARE\s+IN\s+CASH",
+            r"PURCHASE\s+PRICE\s+OF\s+\$\s?(\d+\.\d{2})",
+        ]
+
+        anchors = [m.start() for phrase in matched_phrases for m in re.finditer(re.escape(phrase), upper)]
+        for anchor in anchors:
+            snippet = upper[max(0, anchor - window):anchor + window]
+            for pat in price_patterns:
+                for m in re.finditer(pat, snippet):
+                    price = float(m.group(1))
+                    candidates[price] = candidates.get(price, 0) + 1
+                    context_by_price.setdefault(price, m.group(0))
+
+        if not candidates:
+            return None, None
+
+        # Most frequently repeated value near deal language wins — deal
+        # press releases typically restate the offer price consistently.
+        best_price = max(candidates, key=candidates.get)
+        return best_price, context_by_price[best_price]

@@ -175,14 +175,13 @@ All strategies in the registry have been run through the full suite:
 | Strategy | Score | Fails |
 |---|---|---|
 | Momentum small-cap (long-only) | 8/9 | Permutation (66th percentile) |
-| Momentum small-cap (long/short) | 5/9 | vs B&H, Win Rate, Sub-Period, Permutation |
+| Momentum small-cap (long/short) | 5/9 | vs B&H (6.4% vs 26.1%), Win Rate, Sub-Period, Permutation (35th percentile) |
 | ML Ensemble (mega-cap) | 4/9 | vs B&H, Monthly, Sub-Period, Sharpe, Permutation |
 | Trend-following (30yr multi-asset) | 6/9 | vs B&H, Max DD, Permutation (19th) |
-| Swing mega-cap | 6/9 | vs B&H, Sharpe Significance, Permutation (7th) |
-| **Swing small-cap** | **6/9** | **vs B&H, Win Rate, Permutation (23rd)** |
-| Swing mega-cap | 7/9 | vs B&H, Permutation (8th) |
+| Swing mega-cap | 7/9 | vs B&H (2.6% vs 116.1%), Permutation (8th percentile) |
+| Swing small-cap | 6/9 | vs B&H (44.1% vs 155.4%), Win Rate, Permutation (23rd percentile) |
 
-**No strategy beats buy-and-hold** or passes the permutation test. However, swing small-cap is the first strategy to achieve a **statistically significant Sharpe ratio** (1.18 vs 0.29 threshold) with the lowest max drawdown (-8.1%) of any strategy tested. Its 23rd percentile on the permutation test reflects the strong bull market (random portfolios return 215% median) rather than strategy weakness.
+**Retired with cause: Momentum (both variants), Swing (both universes).** No strategy tested to date beats buy-and-hold or passes the permutation test. Swing small-cap's statistically significant Sharpe (1.18 vs 0.29 threshold) and low drawdown (-8.1%) are real, but they describe a strategy that is *consistently mediocre*, not one with edge — the permutation test already accounts for the bull-market regime by drawing its 500 comparisons from the same universe and period, so a 23rd-percentile result means most random portfolios outperformed it under identical conditions. That's the definition of no edge, not a market-conditions caveat. Both swing configs are retired on the same basis as momentum: real, reproducible underperformance vs. a naive benchmark.
 
 ### Paper Trading
 
