@@ -111,108 +111,144 @@ class SwingTrading:
 
         capital = self.initial_capital
         positions: dict[str, dict] = {}
+        pending_exits: dict[str, str] = {}
+        pending_entries: list[tuple[str, float]] = []
         trades: list[Trade] = []
         equity_curve: list[float] = [capital]
         equity_index: list = [all_dates[0] - pd.Timedelta(days=1)]
 
-        for date in all_dates:
-            for sym in list(positions.keys()):
-                pos = positions[sym]
+        for i, date in enumerate(all_dates):
+            if i == 0:
+                total_equity = capital
+                for sym, pos in positions.items():
+                    ind = indicators.get(sym)
+                    if ind is None:
+                        continue
+                    series_close = ind.loc[ind.index <= date, "close"]
+                    if not series_close.empty:
+                        total_equity += pos["shares"] * series_close.iloc[-1]
+                equity_curve.append(total_equity)
+                equity_index.append(date)
+                continue
+
+            prev_date = all_dates[i - 1]
+
+            # === Execute pending exits (triggered by prev_date's close, fill at date's open) ===
+            for sym in list(pending_exits.keys()):
+                pos = positions.pop(sym, None)
+                if pos is None:
+                    continue
+                ind = indicators.get(sym)
+                if ind is None or date not in ind.index:
+                    continue
+                entry_price = pos["entry_price"]
+                direction = pos["direction"]
+                shares = pos["shares"]
+                fill_price = ind.loc[date, "open"]
+                if direction == 1:
+                    slip = fill_price * self.slippage_pct
+                    sell_price = fill_price - slip
+                else:
+                    slip = fill_price * self.slippage_pct
+                    sell_price = fill_price + slip
+                comm = pos["value"] * self.commission_pct
+                pnl = direction * shares * (sell_price - entry_price) - comm
+                capital += shares * sell_price - comm
+                trades.append(Trade(
+                    date=date, symbol=sym, side="sell",
+                    price=sell_price, shares=shares,
+                    value=shares * sell_price,
+                    pnl=pnl, slippage=slip * shares, commission=comm,
+                ))
+            pending_exits.clear()
+
+            # === Execute pending entries (triggered by prev_date's signal, fill at date's open) ===
+            for sym, direction in pending_entries:
+                if sym in positions:
+                    continue
+                if len(positions) >= self.max_open_positions:
+                    break
                 ind = indicators.get(sym)
                 if ind is None or date not in ind.index:
                     continue
                 row = ind.loc[date]
-                entry_price = pos["entry_price"]
-                entry_date = pos["entry_date"]
-                direction = pos["direction"]
-                holding_days = (date - entry_date).days
-
-                exit_reason = None
-
-                if direction == 1:
-                    target = entry_price + self.atr_target_mult * pos["entry_atr"]
-                    stop = entry_price - self.atr_stop_mult * pos["entry_atr"]
-                    if row["close"] >= target:
-                        exit_reason = "take_profit"
-                    elif row["close"] <= stop:
-                        exit_reason = "stop_loss"
-                    elif holding_days >= self.max_holding_days:
-                        exit_reason = "max_holding"
-                    elif row["rsi"] > self.rsi_overbought:
-                        exit_reason = "rsi_reversal"
-                else:
-                    target = entry_price - self.atr_target_mult * pos["entry_atr"]
-                    stop = entry_price + self.atr_stop_mult * pos["entry_atr"]
-                    if row["close"] <= target:
-                        exit_reason = "take_profit"
-                    elif row["close"] >= stop:
-                        exit_reason = "stop_loss"
-                    elif holding_days >= self.max_holding_days:
-                        exit_reason = "max_holding"
-                    elif row["rsi"] < self.rsi_oversold:
-                        exit_reason = "rsi_reversal"
-
-                if exit_reason is not None and holding_days >= self.min_holding_days:
-                    exec_price = row["close"]
-                    if direction == 1:
-                        slip = exec_price * self.slippage_pct
-                        sell_price = exec_price - slip
-                    else:
-                        slip = exec_price * self.slippage_pct
-                        sell_price = exec_price + slip
-                    comm = pos["value"] * self.commission_pct
-                    shares = pos["shares"]
-                    pnl = direction * shares * (sell_price - entry_price) - comm
-                    capital += shares * sell_price - comm
-                    trades.append(Trade(
-                        date=date, symbol=sym, side="sell",
-                        price=sell_price, shares=shares,
-                        value=shares * sell_price,
-                        pnl=pnl, slippage=slip * shares, commission=comm,
-                    ))
-                    del positions[sym]
-
-            open_pos_count = len(positions)
-            for sym, sig_series in entry_sigs.items():
-                if sym in positions:
-                    continue
-                if date not in sig_series.index:
-                    continue
-                sig = sig_series.loc[date]
-                if sig == 0:
-                    continue
-                if open_pos_count >= self.max_open_positions:
-                    break
-
-                ind = indicators[sym].loc[date]
-                price = ind["close"]
-                atr = ind["atr"]
+                price = row["open"]
+                atr = row["atr"]
                 if np.isnan(atr) or atr <= 0 or price <= 0:
                     continue
-
                 allocation = capital * self.max_position_pct
                 comm = allocation * self.commission_pct
                 slip = price * self.slippage_pct
-                exec_price = price + slip if sig == 1 else price - slip
+                exec_price = price + slip if direction == 1 else price - slip
                 shares = (allocation - comm) / exec_price
                 pos_value = allocation
-
                 positions[sym] = {
                     "entry_price": exec_price,
                     "entry_date": date,
                     "entry_atr": atr,
-                    "direction": sig,
+                    "direction": direction,
                     "shares": shares,
                     "value": pos_value,
                 }
                 capital -= pos_value
-                open_pos_count += 1
                 trades.append(Trade(
                     date=date, symbol=sym, side="buy",
                     price=exec_price, shares=shares,
                     value=pos_value,
                     slippage=slip * shares, commission=comm,
                 ))
+            pending_entries.clear()
+
+            # === Detect new exit conditions using prev_date's close ===
+            for sym, pos in list(positions.items()):
+                ind = indicators.get(sym)
+                if ind is None or prev_date not in ind.index:
+                    continue
+                row = ind.loc[prev_date]
+                entry_price = pos["entry_price"]
+                direction = pos["direction"]
+                holding_days = (date - pos["entry_date"]).days
+                atr = pos["entry_atr"]
+
+                reason = None
+                if direction == 1:
+                    target = entry_price + self.atr_target_mult * atr
+                    stop = entry_price - self.atr_stop_mult * atr
+                    if row["close"] >= target:
+                        reason = "take_profit"
+                    elif row["close"] <= stop:
+                        reason = "stop_loss"
+                    elif holding_days >= self.max_holding_days:
+                        reason = "max_holding"
+                    elif not pd.isna(row.get("rsi")) and row["rsi"] > self.rsi_overbought:
+                        reason = "rsi_reversal"
+                else:
+                    target = entry_price - self.atr_target_mult * atr
+                    stop = entry_price + self.atr_stop_mult * atr
+                    if row["close"] <= target:
+                        reason = "take_profit"
+                    elif row["close"] >= stop:
+                        reason = "stop_loss"
+                    elif holding_days >= self.max_holding_days:
+                        reason = "max_holding"
+                    elif not pd.isna(row.get("rsi")) and row["rsi"] < self.rsi_oversold:
+                        reason = "rsi_reversal"
+
+                if reason is not None and holding_days >= self.min_holding_days:
+                    pending_exits[sym] = reason
+
+            # === Detect new entry signals using prev_date's close ===
+            for sym, sig_series in entry_sigs.items():
+                if sym in positions:
+                    continue
+                if prev_date not in sig_series.index:
+                    continue
+                sig = sig_series.loc[prev_date]
+                if sig == 0:
+                    continue
+                if len(positions) + len(pending_entries) >= self.max_open_positions:
+                    break
+                pending_entries.append((sym, sig))
 
             total_equity = capital
             for sym, pos in positions.items():
