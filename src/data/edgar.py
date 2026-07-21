@@ -1,6 +1,7 @@
 """SEC EDGAR 8-K filing fetcher for merger announcements.
 Rate-limited to comply with SEC requirements (10 req/s max).
 """
+import hashlib
 import logging
 import re
 import time
@@ -35,10 +36,16 @@ class EDGARClient:
         self._last_request = time.time()
 
     def _get(self, url: str) -> Optional[str]:
+        cache_key = hashlib.md5(url.encode()).hexdigest()
+        cache_path = self.cache_dir / cache_key
+        if cache_path.is_file():
+            return cache_path.read_text(encoding="utf-8")
+
         self._rate_limit()
         try:
             r = requests.get(url, headers=SEC_HEADERS, timeout=30)
             if r.status_code == 200:
+                cache_path.write_text(r.text, encoding="utf-8")
                 return r.text
             logger.warning("EDGAR HTTP %d for %s", r.status_code, url)
             return None
