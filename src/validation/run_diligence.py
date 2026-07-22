@@ -17,9 +17,12 @@ import yaml
 import yfinance as yf
 
 from src.data.alpaca_client import AlpacaClient
+from src.data.deal_tracker import DealTracker
+from src.data.edgar import EDGARClient
 from src.trading.momentum import CrossSectionalMomentum
 from src.trading.swing import SwingTrading
 from src.trading.trend import TrendFollowing
+from src.trading.merger_arb import MergerArbBacktest
 from src.validation.diligence import DiligenceSuite
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -109,6 +112,10 @@ STRATEGY_CONFIGS = {
             "smoothing": "average",
             "max_position_pct": 0.2,
         },
+    },
+    "merger_arb": {
+        "type": "merger_arb",
+        "params": {},
     },
 }
 
@@ -254,6 +261,27 @@ def run(strategy_name: str) -> dict:
             trades=result.get("trade_log", []),
             prices=data,
             config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "merger_arb":
+        edgar = EDGARClient()
+        tracker = DealTracker(edgar)
+        resolved = [d for d in tracker.deals if d.status in ("completed", "terminated") and d.offer_price]
+
+        if len(resolved) < 5:
+            logger.warning("Only %d resolved deals — results will be noisy", len(resolved))
+
+        bt = MergerArbBacktest(client)
+        result = bt.run(resolved)
+
+        ticker_set = {d.ticker for d in resolved if d.ticker}
+        bars = client.get_bars(list(ticker_set), timeframe="Day", lookback_days=1500)
+        prices = {s: df for s, df in bars.items() if df is not None and not df.empty}
+        suite = DiligenceSuite(
+            equity_curve=result.equity_curve,
+            trades=result.trades,
+            prices=prices,
             strategy_name=strategy_name,
         )
 

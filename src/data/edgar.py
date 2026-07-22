@@ -15,7 +15,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 SEC_HEADERS = {
-    "User-Agent": "SharesAlpaca/1.0 (research project; contact@example.com)",
+    "User-Agent": "SharesAlpaca/1.0 (research project; jonathan.c.burley@gmail.com)",
     "Accept-Encoding": "gzip, deflate",
 }
 SEC_BASE = "https://www.sec.gov"
@@ -194,6 +194,71 @@ class EDGARClient:
                 result[ticker] = filings
 
         return result
+
+    def _load_cik_reverse_map(self) -> dict[str, str]:
+        """Return {stripped_CIK: ticker} map for resolving tickers from
+        index rows during full-text discovery."""
+        lookup = self._load_cik_map()
+        return {cik.lstrip("0"): ticker for ticker, cik in lookup.items()}
+
+    def discover_merger_deals(
+        self, days: int = 365 * 2, quarters_back: int = 8,
+    ) -> list[dict]:
+        """Scan every 8-K in the EDGAR index for merger language, without
+        filtering by ticker — catches targets a watchlist would miss.
+
+        Expensive on first run (rate-limited parsing of thousands of
+        filings per quarter), but the disk cache makes repeat runs cheap.
+        After the scan, feed results into ``DealTracker.add_deal()``.
+
+        Returns list of merger filings, each enriched with ``ticker``,
+        ``cik``, and ``date`` alongside the standard ``_parse_filing`` keys.
+        """
+        cik_to_ticker = self._load_cik_reverse_map()
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+        start_date = start.strftime("%Y-%m-%d")
+
+        found: list[dict] = []
+        for q in range(quarters_back):
+            total_months_back = q * 3
+            target_month = now.month - total_months_back
+            yr = now.year
+            while target_month < 1:
+                target_month += 12
+                yr -= 1
+            qtr_num = (target_month - 1) // 3 + 1
+            if yr < 2020 or yr > now.year:
+                break
+
+            idx = self._get_quarterly_index(yr, qtr_num)
+            if not idx:
+                continue
+
+            qtr_label = f"{yr} Q{qtr_num}"
+            eight_ks = 0
+            for row in idx:
+                if row.get("form") not in ("8-K", "8-K/A"):
+                    continue
+                if row.get("date", "") < start_date:
+                    continue
+                eight_ks += 1
+                filing = self._parse_filing(row["href"])
+                if filing and filing.get("is_merger"):
+                    row_cik = row.get("cik", "").strip().lstrip("0")
+                    filing["ticker"] = cik_to_ticker.get(row_cik)
+                    filing["cik"] = row_cik
+                    filing["date"] = row.get("date", "")
+                    found.append(filing)
+
+            logger.info(
+                "discover_merger_deals %s: scanned %d 8-Ks, %d merger hits (%d total)",
+                qtr_label, eight_ks, sum(1 for f in found if f.get("date", "").startswith(f"{yr}-")),
+                len(found),
+            )
+
+        return found
 
     def _get_quarterly_index(self, year: int, qtr: int) -> list[dict]:
         url = f"{INDEX_URL}/{year}/QTR{qtr}/form.idx"
