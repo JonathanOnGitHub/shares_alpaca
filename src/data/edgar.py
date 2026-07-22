@@ -35,11 +35,12 @@ class EDGARClient:
             time.sleep(0.15 - elapsed)
         self._last_request = time.time()
 
-    def _get(self, url: str) -> Optional[str]:
+    def _get(self, url: str, max_age_seconds: Optional[int] = None) -> Optional[str]:
         cache_key = hashlib.md5(url.encode()).hexdigest()
         cache_path = self.cache_dir / cache_key
         if cache_path.is_file():
-            return cache_path.read_text(encoding="utf-8")
+            if max_age_seconds is None or (time.time() - cache_path.stat().st_mtime) < max_age_seconds:
+                return cache_path.read_text(encoding="utf-8")
 
         self._rate_limit()
         try:
@@ -143,8 +144,9 @@ class EDGARClient:
         for t in tickers:
             cik = lookup.get(t.upper())
             if cik:
-                cik_to_ticker[cik] = t.upper()
-                ticker_to_cik[t.upper()] = cik
+                stripped = cik.lstrip("0")
+                cik_to_ticker[stripped] = t.upper()
+                ticker_to_cik[t.upper()] = stripped
 
         if not ticker_to_cik:
             return {}
@@ -195,7 +197,17 @@ class EDGARClient:
 
     def _get_quarterly_index(self, year: int, qtr: int) -> list[dict]:
         url = f"{INDEX_URL}/{year}/QTR{qtr}/form.idx"
-        text = self._get(url)
+
+        now = datetime.now()
+        current_qtr = (now.month - 1) // 3 + 1
+        is_current_quarter = (year == now.year and qtr == current_qtr)
+        # Closed quarters are immutable — cache forever. The in-progress
+        # quarter gains new filings daily, so cap its cache age; otherwise
+        # deal outcome tracking would silently miss anything filed after
+        # the first time this quarter was fetched.
+        max_age = 6 * 3600 if is_current_quarter else None
+
+        text = self._get(url, max_age_seconds=max_age)
         if not text:
             return []
 
