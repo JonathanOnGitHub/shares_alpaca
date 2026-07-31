@@ -1,0 +1,86 @@
+{
+  "strategy": "val_timing_small",
+  "passed": 5,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": false,
+      "detail": "Too few overlapping days",
+      "metrics": {}
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (6.1%): 0.2% (total: 6.2%)",
+      "metrics": {
+        "Best Month": "6.08%",
+        "Return (all)": "6.24%",
+        "Return (excl)": "0.16%",
+        "Attributed to 1 month": "97%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "112/158 winning trades (71%)",
+      "metrics": {
+        "Win Rate": "70.9%",
+        "Trades": "158"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": true,
+      "detail": "Max DD: -19.5%, longest streak: 374 days",
+      "metrics": {
+        "Max DD": "-19.45%",
+        "Longest DD Days": "374"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "25/44 rolling 6m windows positive, monthly Sharpe: 0.06",
+      "metrics": {
+        "Positive 6m Windows": "25/44 (57%)",
+        "Monthly Sharpe": "0.06"
+      }
+    },
+    "Trade Concentration": {
+      "passed": "True",
+      "detail": "Top 1 trade: 4% of total PnL, Top 3: 10%",
+      "metrics": {
+        "Top Trade Share": "4.2%",
+        "Top 3 Share": "9.9%",
+        "Total Trades": "158"
+      }
+    },
+    "Sub-Period Consistency": {
+      "passed": "False",
+      "detail": "First half: 9.9%, Second half: -3.3%",
+      "metrics": {
+        "First Half Return": "9.86%",
+        "Second Half Return": "-3.29%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "False",
+      "detail": "Sharpe 0.20 vs threshold 0.29 for N=49 months",
+      "metrics": {
+        "Annual Sharpe": "0.20",
+        "Significance Threshold": "0.29"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Too few overlapping days for permutation test",
+      "metrics": {}
+    }
+  },
+  "timestamp_utc": "20260731T094857Z",
+  "params": {
+    "pe_ma_window": 60,
+    "rebal_days": 21,
+    "max_position_pct": 0.1,
+    "max_open_positions": 8,
+    "initial_capital": 100000.0,
+    "slippage_pct": 0.001,
+    "commission_pct": 0.0
+  }
+}

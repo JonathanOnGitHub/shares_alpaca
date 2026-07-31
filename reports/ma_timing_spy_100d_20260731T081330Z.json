@@ -1,0 +1,84 @@
+{
+  "strategy": "ma_timing_spy_100d",
+  "passed": 6,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "False",
+      "detail": "Strategy 1135.4% vs B&H 2975.9%",
+      "metrics": {
+        "Strategy Return": "1135.35%",
+        "B&H Return": "2975.86%",
+        "Strategy Sharpe": "0.71",
+        "B&H Sharpe": "0.64"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (8.9%): 1034.2% (total: 1135.4%)",
+      "metrics": {
+        "Best Month": "8.92%",
+        "Return (all)": "1135.35%",
+        "Return (excl)": "1034.17%",
+        "Attributed to 1 month": "9%"
+      }
+    },
+    "Win Rate (Monthly)": {
+      "passed": "True",
+      "detail": "264/402 winning months (66%)",
+      "metrics": {
+        "Win Rate": "65.7%",
+        "Periods": "402"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": false,
+      "detail": "Max DD: -46.4%, longest streak: 2877 days",
+      "metrics": {
+        "Max DD": "-46.44%",
+        "Longest DD Days": "2877"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "268/397 rolling 6m windows positive, monthly Sharpe: 0.23",
+      "metrics": {
+        "Positive 6m Windows": "268/397 (68%)",
+        "Monthly Sharpe": "0.23"
+      }
+    },
+    "Trade Concentration": {
+      "passed": true,
+      "detail": "Only 0 trades \u2014 insufficient for analysis",
+      "metrics": {}
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 149.6%, Second half: 394.9%",
+      "metrics": {
+        "First Half Return": "149.63%",
+        "Second Half Return": "394.88%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 0.79 vs threshold 0.10 for N=402 months",
+      "metrics": {
+        "Annual Sharpe": "0.79",
+        "Significance Threshold": "0.10"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Insufficient data for permutation test",
+      "metrics": {}
+    }
+  },
+  "timestamp_utc": "20260731T081330Z",
+  "params": {
+    "ma_window": 100,
+    "slippage_pct": 0.0005,
+    "rf_rate": 0.0001984126984126984,
+    "initial_capital": 100000.0
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "strategy": "crossasset_rot_ls",
+  "passed": 1,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "False",
+      "detail": "Strategy -22.0% vs B&H 651.2%",
+      "metrics": {
+        "Strategy Return": "-22.02%",
+        "B&H Return": "651.20%",
+        "Strategy Sharpe": "-0.30",
+        "B&H Sharpe": "0.44"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "False",
+      "detail": "Without best month (2.6%): -24.0% (total: -22.0%)",
+      "metrics": {
+        "Best Month": "2.65%",
+        "Return (all)": "-22.02%",
+        "Return (excl)": "-24.03%",
+        "Attributed to 1 month": "-9%"
+      }
+    },
+    "Win Rate (Monthly)": {
+      "passed": "False",
+      "detail": "123/402 winning months (31%)",
+      "metrics": {
+        "Win Rate": "30.6%",
+        "Periods": "402"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": false,
+      "detail": "Max DD: -24.0%, longest streak: 7905 days",
+      "metrics": {
+        "Max DD": "-24.05%",
+        "Longest DD Days": "7905"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "151/397 rolling 6m windows positive, monthly Sharpe: -0.09",
+      "metrics": {
+        "Positive 6m Windows": "151/397 (38%)",
+        "Monthly Sharpe": "-0.09"
+      }
+    },
+    "Trade Concentration": {
+      "passed": true,
+      "detail": "Only 0 trades \u2014 insufficient for analysis",
+      "metrics": {}
+    },
+    "Sub-Period Consistency": {
+      "passed": "False",
+      "detail": "First half: -18.3%, Second half: -4.5%",
+      "metrics": {
+        "First Half Return": "-18.33%",
+        "Second Half Return": "-4.52%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "False",
+      "detail": "Sharpe -0.30 vs threshold 0.10 for N=402 months",
+      "metrics": {
+        "Annual Sharpe": "-0.30",
+        "Significance Threshold": "0.10"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (-22.0%) beats 1% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "-22.02%",
+        "Random Median": "984.54%",
+        "Percentile Rank": "1.2%"
+      }
+    }
+  },
+  "timestamp_utc": "20260731T085614Z",
+  "params": {
+    "lookback_days": [
+      21,
+      63,
+      126
+    ],
+    "vol_target": 0.15,
+    "vol_lookback": 63,
+    "max_position_pct": 0.2,
+    "n_long": 3,
+    "n_short": 2,
+    "rebalance_frequency": "monthly"
+  }
+}

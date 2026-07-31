@@ -1,0 +1,95 @@
+{
+  "strategy": "crossasset_rot_long",
+  "passed": 5,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "False",
+      "detail": "Strategy 35.4% vs B&H 651.2%",
+      "metrics": {
+        "Strategy Return": "35.40%",
+        "B&H Return": "651.20%",
+        "Strategy Sharpe": "0.33",
+        "B&H Sharpe": "0.44"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (3.7%): 30.6% (total: 35.4%)",
+      "metrics": {
+        "Best Month": "3.69%",
+        "Return (all)": "35.40%",
+        "Return (excl)": "30.58%",
+        "Attributed to 1 month": "14%"
+      }
+    },
+    "Win Rate (Monthly)": {
+      "passed": "False",
+      "detail": "162/402 winning months (40%)",
+      "metrics": {
+        "Win Rate": "40.3%",
+        "Periods": "402"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": false,
+      "detail": "Max DD: -9.5%, longest streak: 1950 days",
+      "metrics": {
+        "Max DD": "-9.46%",
+        "Longest DD Days": "1950"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "247/397 rolling 6m windows positive, monthly Sharpe: 0.10",
+      "metrics": {
+        "Positive 6m Windows": "247/397 (62%)",
+        "Monthly Sharpe": "0.10"
+      }
+    },
+    "Trade Concentration": {
+      "passed": true,
+      "detail": "Only 0 trades \u2014 insufficient for analysis",
+      "metrics": {}
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 17.8%, Second half: 14.9%",
+      "metrics": {
+        "First Half Return": "17.85%",
+        "Second Half Return": "14.89%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 0.33 vs threshold 0.10 for N=402 months",
+      "metrics": {
+        "Annual Sharpe": "0.33",
+        "Significance Threshold": "0.10"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (35.4%) beats 4% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "35.40%",
+        "Random Median": "984.54%",
+        "Percentile Rank": "3.6%"
+      }
+    }
+  },
+  "timestamp_utc": "20260731T085505Z",
+  "params": {
+    "lookback_days": [
+      21,
+      63,
+      126
+    ],
+    "vol_target": 0.15,
+    "vol_lookback": 63,
+    "max_position_pct": 0.25,
+    "n_long": 4,
+    "n_short": 0,
+    "rebalance_frequency": "monthly"
+  }
+}

@@ -68,13 +68,20 @@ class DiligenceSuite:
         config: Optional[dict] = None,
         strategy_name: str = "Strategy",
     ):
-        self.equity_curve = equity_curve
+        def _normalize_idx(idx):
+            if hasattr(idx, "tz") and idx.tz is not None:
+                idx = idx.tz_convert(None)
+            return pd.DatetimeIndex([pd.Timestamp(d.date()) for d in idx])
+
+        eq_idx = _normalize_idx(equity_curve.index)
+        self.equity_curve = pd.Series(equity_curve.values, index=eq_idx)
+
         self.trades = trades
         self.prices = prices
         self.config = config or {}
         self.strategy_name = strategy_name
-        self._daily_returns = equity_curve.pct_change().dropna()
-        self._monthly_returns = equity_curve.resample("ME").last().pct_change().dropna()
+        self._daily_returns = self.equity_curve.pct_change().dropna()
+        self._monthly_returns = self.equity_curve.resample("ME").last().pct_change().dropna()
 
     def run_all(self) -> DiligenceReport:
         report = DiligenceReport(strategy_name=self.strategy_name)
@@ -98,7 +105,16 @@ class DiligenceSuite:
         if n == 0:
             return DiligenceCheck("vs Equal-Weight B&H", False, "No price data")
 
-        pf = pd.DataFrame({s: self.prices[s]["close"] for s in self.prices})
+        def _normalize_idx(idx):
+            if hasattr(idx, "tz") and idx.tz is not None:
+                idx = idx.tz_convert(None)
+            return pd.DatetimeIndex([pd.Timestamp(d.date()) for d in idx])
+
+        pf_dict = {}
+        for s, df in self.prices.items():
+            idx = _normalize_idx(df.index)
+            pf_dict[s] = pd.Series(df["close"].values, index=idx)
+        pf = pd.DataFrame(pf_dict)
         ew = pf.mean(axis=1)
         ew_rets = ew.pct_change().dropna()
 
@@ -244,7 +260,7 @@ class DiligenceSuite:
         if len(sell_trades) < 5:
             return DiligenceCheck("Trade Concentration", True, f"Only {len(sell_trades)} trades — insufficient for analysis")
 
-        pnls = np.array([abs(t.pnl) for t in sell_trades if hasattr(t, "pnl")])
+        pnls = np.array([abs(t.pnl) for t in sell_trades if hasattr(t, "pnl") and t.pnl is not None and not (isinstance(t.pnl, float) and np.isnan(t.pnl))])
         if len(pnls) == 0:
             return DiligenceCheck("Trade Concentration", True, "No PnL data")
 
@@ -296,7 +312,18 @@ class DiligenceSuite:
             return DiligenceCheck("Permutation Test", False, "Insufficient data for permutation test")
 
         symbols = list(self.prices.keys())
-        price_df = pd.DataFrame({s: self.prices[s]["close"] for s in symbols}).dropna(how="all")
+
+        def _normalize_idx(idx):
+            if hasattr(idx, "tz") and idx.tz is not None:
+                idx = idx.tz_convert(None)
+            return pd.DatetimeIndex([pd.Timestamp(d.date()) for d in idx])
+
+        pf_dict = {}
+        for s in symbols:
+            df = self.prices[s]
+            idx = _normalize_idx(df.index)
+            pf_dict[s] = pd.Series(df["close"].values, index=idx)
+        price_df = pd.DataFrame(pf_dict).dropna(how="all")
         daily_returns = price_df.pct_change()
 
         # Recover the strategy's actual weight per symbol per day is not

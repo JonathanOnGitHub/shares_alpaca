@@ -23,6 +23,10 @@ from src.trading.momentum import CrossSectionalMomentum
 from src.trading.swing import SwingTrading
 from src.trading.trend import TrendFollowing
 from src.trading.merger_arb import MergerArbBacktest
+from src.trading.ma_timing import MATiming
+from src.trading.low_vol import LowVol
+from src.trading.mean_reversion import MeanReversion
+from src.trading.valuation_timing import ValuationTiming
 from src.validation.diligence import DiligenceSuite
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -113,9 +117,239 @@ STRATEGY_CONFIGS = {
             "max_position_pct": 0.2,
         },
     },
+    "crossasset_rot_long": {
+        "type": "cross_asset_momentum",
+        "params": {
+            "lookback_days": [21, 63, 126],
+            "vol_target": 0.15,
+            "vol_lookback": 63,
+            "max_position_pct": 0.25,
+            "n_long": 4,
+            "n_short": 0,
+            "rebalance_frequency": "monthly",
+        },
+    },
+    "crossasset_rot_ls": {
+        "type": "cross_asset_momentum",
+        "params": {
+            "lookback_days": [21, 63, 126],
+            "vol_target": 0.15,
+            "vol_lookback": 63,
+            "max_position_pct": 0.20,
+            "n_long": 3,
+            "n_short": 2,
+            "rebalance_frequency": "monthly",
+        },
+    },
+    "crossasset_rot_best": {
+        "type": "cross_asset_momentum",
+        "params": {
+            "lookback_days": [63, 126, 252],
+            "vol_target": 0.15,
+            "vol_lookback": 63,
+            "max_position_pct": 0.25,
+            "n_long": 3,
+            "n_short": 0,
+            "rebalance_frequency": "monthly",
+        },
+    },
     "merger_arb": {
         "type": "merger_arb",
         "params": {},
+    },
+    "ma_timing_spy": {
+        "type": "ma_timing",
+        "params": {
+            "ma_window": 200,
+            "slippage_pct": 0.0005,
+            "rf_rate": 0.05 / 252,
+            "initial_capital": 100_000.0,
+        },
+        "benchmark": "SPY",
+        "symbols_config": None,
+    },
+    "ma_timing_smallcap": {
+        "type": "ma_timing",
+        "params": {
+            "ma_window": 200,
+            "slippage_pct": 0.0005,
+            "rf_rate": 0.05 / 252,
+            "initial_capital": 100_000.0,
+        },
+        "benchmark": None,
+        "symbols_config": "config/config_smallcap.yaml",
+    },
+    "ma_timing_mega": {
+        "type": "ma_timing",
+        "params": {
+            "ma_window": 200,
+            "slippage_pct": 0.0005,
+            "rf_rate": 0.05 / 252,
+            "initial_capital": 100_000.0,
+        },
+        "benchmark": None,
+        "symbols_config": "config/config.yaml",
+    },
+    "ma_timing_spy_100d": {
+        "type": "ma_timing",
+        "params": {
+            "ma_window": 100,
+            "slippage_pct": 0.0005,
+            "rf_rate": 0.05 / 252,
+            "initial_capital": 100_000.0,
+        },
+        "benchmark": "SPY",
+        "symbols_config": None,
+    },
+    "ma_timing_spy_50d": {
+        "type": "ma_timing",
+        "params": {
+            "ma_window": 50,
+            "slippage_pct": 0.0005,
+            "rf_rate": 0.05 / 252,
+            "initial_capital": 100_000.0,
+        },
+        "benchmark": "SPY",
+        "symbols_config": None,
+    },
+    "lowvol_mega_inverse": {
+        "type": "low_vol",
+        "symbols_config": "config/config.yaml",
+        "params": {
+            "vol_window": 63,
+            "lookback_days": 21,
+            "n_stocks": 10,
+            "weighting": "inverse_vol",
+            "rebalance_frequency": "monthly",
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+        },
+    },
+    "lowvol_mega_minvar": {
+        "type": "low_vol",
+        "symbols_config": "config/config.yaml",
+        "params": {
+            "vol_window": 63,
+            "lookback_days": 21,
+            "n_stocks": 10,
+            "weighting": "min_variance",
+            "rebalance_frequency": "monthly",
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+        },
+    },
+    "lowvol_small_inverse": {
+        "type": "low_vol",
+        "symbols_config": "config/config_smallcap.yaml",
+        "params": {
+            "vol_window": 63,
+            "lookback_days": 21,
+            "n_stocks": 10,
+            "weighting": "inverse_vol",
+            "rebalance_frequency": "monthly",
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+        },
+    },
+    "lowvol_small_quality": {
+        "type": "low_vol",
+        "params": {
+            "vol_window": 63,
+            "lookback_days": 21,
+            "n_stocks": 10,
+            "weighting": "inverse_vol",
+            "rebalance_frequency": "monthly",
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "min_quality_stocks": 5,
+            "quality_filter": {
+                "min_roe": 0.05,
+                "max_debt_equity": 99999.0,
+                "min_profit_margin": 0.0,
+            },
+        },
+    },
+    "lowvol_mega_quality": {
+        "type": "low_vol",
+        "params": {
+            "vol_window": 63,
+            "lookback_days": 21,
+            "n_stocks": 10,
+            "weighting": "inverse_vol",
+            "rebalance_frequency": "monthly",
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "min_quality_stocks": 5,
+            "quality_filter": {
+                "min_roe": 0.10,
+                "max_debt_equity": 200.0,
+                "min_profit_margin": 0.05,
+            },
+        },
+    },
+    "meanrev_mega": {
+        "type": "mean_reversion",
+        "params": {
+            "rsi_period": 14,
+            "rsi_oversold": 25,
+            "rsi_overbought": 75,
+            "rsi_exit_long": 55,
+            "rsi_exit_short": 45,
+            "atr_period": 14,
+            "atr_target_mult": 1.5,
+            "atr_stop_mult": 1.0,
+            "max_holding_days": 3,
+            "min_holding_days": 1,
+            "max_position_pct": 0.10,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
+    },
+    "meanrev_small": {
+        "type": "mean_reversion",
+        "params": {
+            "rsi_period": 14,
+            "rsi_oversold": 20,
+            "rsi_overbought": 80,
+            "rsi_exit_long": 55,
+            "rsi_exit_short": 45,
+            "atr_period": 14,
+            "atr_target_mult": 1.5,
+            "atr_stop_mult": 1.0,
+            "max_holding_days": 2,
+            "min_holding_days": 1,
+            "max_position_pct": 0.10,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
+    },
+    "val_timing_mega": {
+        "type": "valuation_timing",
+        "params": {
+            "pe_ma_window": 60,
+            "rebal_days": 21,
+            "max_position_pct": 0.10,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
+    },
+    "val_timing_small": {
+        "type": "valuation_timing",
+        "params": {
+            "pe_ma_window": 60,
+            "rebal_days": 21,
+            "max_position_pct": 0.10,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
     },
 }
 
@@ -256,6 +490,153 @@ def run(strategy_name: str) -> dict:
         result = strategy.backtest(data)
         if "equity_curve" not in result or len(result["equity_curve"]) == 0:
             raise RuntimeError("Swing backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=data,
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "ma_timing":
+        if spec.get("symbols_config"):
+            symbols = load_symbols(spec["symbols_config"])
+            data = client.get_bars(symbols, timeframe="Day", lookback_days=1000)
+            data = {s: df for s, df in data.items() if not df.empty and len(df) > 300}
+        else:
+            data = {}
+
+        strategy = MATiming(spec["params"])
+        result = strategy.backtest(data, benchmark=spec.get("benchmark"))
+
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("MA timing backtest produced no equity curve")
+
+        prices_for_suite = result.get("prices", {})
+        if not prices_for_suite and spec.get("benchmark"):
+            import yfinance as yf
+            h = yf.Ticker(spec["benchmark"]).history(period="max")
+            if h is not None and len(h) > 100:
+                close_col = h["Close"]
+                if hasattr(close_col.index, "tz") and close_col.index.tz is not None:
+                    close_col.index = close_col.index.tz_localize(None)
+                prices_for_suite = {spec["benchmark"]: pd.DataFrame({"close": close_col})}
+
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=prices_for_suite,
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "low_vol":
+        mega_symbols = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'JPM', 'V', 'WMT',
+            'JNJ', 'PG', 'XOM', 'BAC', 'DIS', 'HD', 'CVX', 'UNH', 'MA', 'COST',
+            'NFLX', 'ADBE', 'CRM', 'AMD', 'CSCO', 'PFE', 'ABBV', 'MRK', 'TMO', 'AVGO',
+            'ACN', 'LIN', 'TXN', 'QCOM', 'AMGN', 'NEE', 'PM', 'ORCL', 'HON', 'RTX',
+            'LOW', 'IBM', 'CAT', 'GE', 'MCD', 'BKNG', 'T', 'SPGI', 'DE', 'SYK',
+        ]
+        smallcap_symbols = [
+            'AEO', 'ANF', 'BOOT', 'CROX', 'DKS', 'FIVE', 'OLLI', 'CHWY', 'CVNA', 'COIN',
+            'HOOD', 'AFRM', 'UPST', 'UAA', 'BBWI', 'ALGM', 'CRSP', 'BEAM', 'FIVN', 'RNG',
+            'QTWO', 'TOST', 'MNDY', 'GTLB', 'SMAR', 'WIX', 'PATH', 'CALM', 'EXAS', 'GH',
+        ]
+
+        if strategy_name.startswith("lowvol_mega"):
+            symbols = mega_symbols
+        else:
+            symbols = smallcap_symbols
+
+        data = client.get_bars(symbols, timeframe="Day", lookback_days=1000)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 300}
+        strategy = LowVol(spec["params"])
+        result = strategy.backtest(data)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Low-vol backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=result.get("prices", data),
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "cross_asset_momentum":
+        from src.trading.cross_asset_momentum import CrossAssetMomentum
+        client = AlpacaClient()
+        mega_symbols = [
+            'SPY', 'QQQ', 'IWM', 'TLT', 'IEF', 'LQD', 'HYG',
+            'GLD', 'DBC', 'VNQ', 'XLU', 'XLE', 'XLV', 'XLK',
+            'VWO', 'EFA', 'EEM', 'TIP', 'IAU',
+        ]
+        data = client.get_bars(mega_symbols, timeframe="Day", lookback_days=1000)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 300}
+        if len(data) < 5:
+            raise RuntimeError(f"Only {len(data)} symbols with enough data")
+        strategy = CrossAssetMomentum(spec["params"])
+        result = strategy.backtest(symbols=mega_symbols)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Cross-asset momentum backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=result.get("prices", data),
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "mean_reversion":
+        client = AlpacaClient()
+        mega_symbols = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'JPM', 'V', 'WMT',
+            'JNJ', 'PG', 'XOM', 'BAC', 'DIS', 'HD', 'CVX', 'UNH', 'MA', 'COST',
+            'NFLX', 'ADBE', 'CRM', 'AMD', 'CSCO', 'PFE', 'ABBV', 'MRK', 'TMO', 'AVGO',
+        ]
+        smallcap_symbols = [
+            'AEO', 'ANF', 'BOOT', 'CROX', 'DKS', 'FIVE', 'OLLI', 'CHWY', 'CVNA', 'COIN',
+            'HOOD', 'AFRM', 'UPST', 'UAA', 'BBWI', 'ALGM', 'CRSP', 'BEAM', 'FIVN', 'RNG',
+            'QTWO', 'TOST', 'MNDY', 'GTLB', 'SMAR', 'WIX', 'PATH', 'CALM', 'EXAS', 'GH',
+        ]
+        symbols = mega_symbols if strategy_name == "meanrev_mega" else smallcap_symbols
+        data = client.get_bars(symbols, timeframe="Day", lookback_days=1500)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 200}
+        if len(data) < 5:
+            raise RuntimeError(f"Only {len(data)} symbols with enough data")
+        strategy = MeanReversion(spec["params"])
+        result = strategy.backtest(data)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Mean reversion backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=data,
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "valuation_timing":
+        client = AlpacaClient()
+        mega_symbols = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'JPM', 'V', 'WMT',
+            'JNJ', 'PG', 'XOM', 'BAC', 'DIS', 'HD', 'CVX', 'UNH', 'MA', 'COST',
+            'NFLX', 'ADBE', 'CRM', 'AMD', 'CSCO', 'PFE', 'ABBV', 'MRK', 'TMO', 'AVGO',
+        ]
+        smallcap_symbols = [
+            'AEO', 'ANF', 'BOOT', 'CROX', 'DKS', 'FIVE', 'OLLI', 'CHWY', 'CVNA', 'COIN',
+            'HOOD', 'AFRM', 'UPST', 'UAA', 'BBWI', 'ALGM', 'CRSP', 'BEAM', 'FIVN', 'RNG',
+            'QTWO', 'TOST', 'MNDY', 'GTLB', 'SMAR', 'WIX', 'PATH', 'CALM', 'EXAS', 'GH',
+        ]
+        symbols = mega_symbols if strategy_name == "val_timing_mega" else smallcap_symbols
+        data = client.get_bars(symbols, timeframe="Day", lookback_days=1500)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 200}
+        if len(data) < 5:
+            raise RuntimeError(f"Only {len(data)} symbols with enough data")
+        strategy = ValuationTiming(spec["params"])
+        result = strategy.backtest(data)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Valuation timing backtest produced no equity curve")
         suite = DiligenceSuite(
             equity_curve=result["equity_curve"],
             trades=result.get("trade_log", []),
