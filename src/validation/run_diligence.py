@@ -27,6 +27,7 @@ from src.trading.ma_timing import MATiming
 from src.trading.low_vol import LowVol
 from src.trading.mean_reversion import MeanReversion
 from src.trading.valuation_timing import ValuationTiming
+from src.trading.covered_calls import CoveredCalls
 from src.validation.diligence import DiligenceSuite
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -56,6 +57,28 @@ STRATEGY_CONFIGS = {
             "holding_months": 1,
             "top_n": 5,
             "bottom_n": 5,
+        },
+    },
+    "jt_smallcap_decile": {
+        "type": "jt_momentum",
+        "symbols_config": "config/config_smallcap.yaml",
+        "params": {
+            "J": 6,
+            "K": 6,
+            "skip_months": 1,
+            "percentile": "decile",
+            "min_price": 0.0,
+        },
+    },
+    "jt_smallcap_quintile": {
+        "type": "jt_momentum",
+        "symbols_config": "config/config_smallcap.yaml",
+        "params": {
+            "J": 9,
+            "K": 3,
+            "skip_months": 1,
+            "percentile": "quintile",
+            "min_price": 0.0,
         },
     },
     "ensemble_mega": {
@@ -343,6 +366,20 @@ STRATEGY_CONFIGS = {
         "type": "valuation_timing",
         "params": {
             "pe_ma_window": 60,
+            "rebal_days": 21,
+            "max_position_pct": 0.10,
+            "max_open_positions": 8,
+            "initial_capital": 100_000.0,
+            "slippage_pct": 0.001,
+            "commission_pct": 0.0,
+        },
+    },
+    "covered_calls_mega": {
+        "type": "covered_calls",
+        "params": {
+            "strike_otm_pct": 0.05,
+            "vol_window": 20,
+            "days_to_expiry": 30,
             "rebal_days": 21,
             "max_position_pct": 0.10,
             "max_open_positions": 8,
@@ -645,6 +682,29 @@ def run(strategy_name: str) -> dict:
             strategy_name=strategy_name,
         )
 
+    elif spec["type"] == "covered_calls":
+        client = AlpacaClient()
+        mega_symbols = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'JPM', 'V', 'WMT',
+            'JNJ', 'PG', 'XOM', 'BAC', 'DIS', 'HD', 'CVX', 'UNH', 'MA', 'COST',
+            'NFLX', 'ADBE', 'CRM', 'AMD', 'CSCO', 'PFE', 'ABBV', 'MRK', 'TMO', 'AVGO',
+        ]
+        data = client.get_bars(mega_symbols, timeframe="Day", lookback_days=1500)
+        data = {s: df for s, df in data.items() if not df.empty and len(df) > 200}
+        if len(data) < 5:
+            raise RuntimeError(f"Only {len(data)} symbols with enough data")
+        strategy = CoveredCalls(spec["params"])
+        result = strategy.backtest(data)
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("Covered calls backtest produced no equity curve")
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=data,
+            config=spec["params"],
+            strategy_name=strategy_name,
+        )
+
     elif spec["type"] == "merger_arb":
         edgar = EDGARClient()
         tracker = DealTracker(edgar)
@@ -663,6 +723,64 @@ def run(strategy_name: str) -> dict:
             equity_curve=result.equity_curve,
             trades=result.trades,
             prices=prices,
+            strategy_name=strategy_name,
+        )
+
+    elif spec["type"] == "jt_momentum":
+        import json
+        import yfinance as yf
+        import warnings
+        from src.trading.jt_momentum import JTMomentum
+        import yaml
+
+        warnings.filterwarnings("ignore", category=UserWarning)
+
+        symbols_cfg_path = ROOT / spec["symbols_config"]
+        if symbols_cfg_path.exists():
+            with open(symbols_cfg_path) as f:
+                syms_cfg = yaml.safe_load(f)
+                symbols = syms_cfg.get("symbols", [])
+        else:
+            symbols = []
+
+        if not symbols:
+            universe_path = Path("/home/burley/Personal/Trading/JT_momentum/smallcap_filtered.json")
+            if universe_path.exists():
+                with open(universe_path) as f:
+                    symbols = list(json.load(f).keys())
+            else:
+                raise ValueError("No symbols for JT momentum")
+
+        data = {}
+        for sym in symbols[:500]:
+            try:
+                ticker = yf.Ticker(sym, session=False)
+                df = ticker.history(period="max", auto_adjust=True)
+                if df is not None and len(df) > 200 and "Close" in df.columns:
+                    data[sym] = pd.DataFrame({"close": df["Close"]})
+            except Exception:
+                continue
+
+        if len(data) < 20:
+            raise RuntimeError(f"Only {len(data)} symbols with sufficient data")
+
+        strategy = JTMomentum(
+            J=spec["params"]["J"],
+            K=spec["params"]["K"],
+            skip_months=spec["params"].get("skip_months", 1),
+            percentile=spec["params"].get("percentile", "decile"),
+            min_price=spec["params"].get("min_price", 0.0),
+        )
+        result = strategy.backtest(data)
+
+        if "equity_curve" not in result or len(result["equity_curve"]) == 0:
+            raise RuntimeError("JT momentum backtest produced no equity curve")
+
+        suite = DiligenceSuite(
+            equity_curve=result["equity_curve"],
+            trades=result.get("trade_log", []),
+            prices=result.get("prices", data),
+            config=spec["params"],
             strategy_name=strategy_name,
         )
 

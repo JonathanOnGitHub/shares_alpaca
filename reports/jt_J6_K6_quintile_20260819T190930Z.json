@@ -1,0 +1,83 @@
+{
+  "strategy": "J=6, K=6, top quintile",
+  "passed": 9,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": true,
+      "detail": "Strategy 1281.1% vs B&H 263.3%",
+      "metrics": {
+        "Strategy Return": "1281.13%",
+        "B&H Return": "263.33%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best (17.6%): 1104.6% (total: 1317.2%)",
+      "metrics": {
+        "Best Month": "17.65%",
+        "Return (all)": "1317.21%",
+        "Return (excl)": "1104.65%",
+        "Attributed to 1 month": "16%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "77/106 winning trades (73%)",
+      "metrics": {
+        "Win Rate": "72.6%",
+        "Trades": "106"
+      }
+    },
+    "Max Drawdown": {
+      "passed": true,
+      "detail": "Max DD: -25.7%, longest drawdown: 551 days",
+      "metrics": {
+        "Max DD": "-25.74%",
+        "Max Duration (days)": "551"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "71/102 positive months (70%)",
+      "metrics": {
+        "Positive Months": "71/102",
+        "Rate": "69.6%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 24/106 trades (23%) = 50% of PnL",
+      "metrics": {
+        "Top N% of trades": "23%",
+        "PnL share": "50%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "True",
+      "detail": "1st half: 255.1%, 2nd half: 285.9%",
+      "metrics": {
+        "1st Half Return": "255.07%",
+        "2nd Half Return": "285.86%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "t=4.17 (need t>2.0 for significance at 5%)",
+      "metrics": {
+        "t-statistic": "4.173",
+        "Sharpe (daily)": "1.404"
+      }
+    },
+    "Permutation Test": {
+      "passed": "True",
+      "detail": "Strategy 1281.1% vs 500 random sequences \u2014 100th percentile",
+      "metrics": {
+        "Strategy Return": "1281.13%",
+        "Random Mean": "1281.13%",
+        "Percentile": "100.0%"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T190930Z"
+}
