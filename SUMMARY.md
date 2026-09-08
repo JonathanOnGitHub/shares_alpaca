@@ -613,12 +613,50 @@ The original used **hardcoded survivor stocks** (PLTR, COIN, etc.) that happened
 
 ---
 
+### LowVol: Rolling Annual Top 10 Lowest Volatility Test
+
+Select the 10 lowest-volatility stocks based on prior year (252-day rolling vol), then hold for the current year.
+
+#### Results
+
+| Year | Benchmark | LowVol | Random |
+|------|-----------|--------|--------|
+| 2016 | 18.6% | 19.7% | 18.4% |
+| 2017 | 27.7% | 18.8% | 29.0% |
+| 2018 | 3.5% | -4.8% | 3.1% |
+| 2019 | 34.1% | 26.3% | 35.8% |
+| 2020 | 43.4% | 12.6% | 34.2% |
+| 2021 | 33.7% | 18.2% | 31.8% |
+| 2022 | -9.3% | 1.0% | -9.6% |
+| 2023 | 40.8% | -1.3% | 41.0% |
+| 2024 | 20.3% | 17.3% | 21.2% |
+
+#### Summary Statistics
+
+| Strategy | Avg Ann | 9yr Compound | Beat B&H |
+|----------|---------|--------------|----------|
+| Benchmark (all stocks) | 23.6% | **518%** | N/A |
+| **LowVol (10 stocks)** | **12.0%** | **166%** | **2/9** |
+| Random 10 (avg) | 22.8% | 499% | 45% |
+
+#### Key Findings: LowVol
+
+1. **LowVol is CATASTROPHICALLY debunked**: 166% vs original 952% — inflated ~6x
+2. **Only beats B&H 2/9 years** — worse than random selection (which beats 45% of year-cases)
+3. **Low volatility gets punished in trending bull markets** — low-vol names (utilities, staples, REITs) dramatically underperform growth stocks
+4. **The 2022 bear market was the only year it helped** (1% vs -9.3% B&H)
+
+**Verdict: lowvol_small_inverse is fundamentally flawed for trending markets.** The original 11-year backtest was pure survivorship bias — holding the low-vol names that happened to survive and not rotate into growth.
+
+---
+
 ### Overall Conclusions
 
 | Strategy | Original Return | Debiased Return | Verdict |
 |----------|-----------------|-----------------|---------|
 | covered_calls_mega | 2,170% (11yr) | ~250% (10yr) | **DEBUNKED** — survivorship bias inflated ~10x |
 | momentum_smallcap | 1,512% (11yr) | ~952% (9yr) | **Partially valid** — genuine alpha but overestimated |
+| lowvol_small_inverse | 952% (11yr) | ~166% (9yr) | **DEBUNKED** — survivorship bias inflated ~6x, only beats B&H 2/9 years |
 
 **The core lesson:** Fixed-basket backtests overstate returns because they implicitly select for stocks that survived. Rolling annual rebalancing reveals the true alpha of a strategy.
 
