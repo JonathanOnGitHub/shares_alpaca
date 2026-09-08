@@ -1,0 +1,65 @@
+{
+  "benchmark": {
+    "avg_ann": 23.6885805967654,
+    "compound": 522.4852802268041
+  },
+  "random": {
+    "avg": 507.5327117583896,
+    "std": 203.7723329127349
+  },
+  "strategies": [
+    {
+      "strategy": "highvol10",
+      "avg_ann": 69.5537336871812,
+      "compound": 5753.566762430441,
+      "beats_bh": 8,
+      "sharpe_like": 1.0987249402953112
+    },
+    {
+      "strategy": "top10_momentum",
+      "avg_ann": 38.926566526238574,
+      "compound": 1355.5711157695844,
+      "beats_bh": 7,
+      "sharpe_like": 1.159734594425012
+    },
+    {
+      "strategy": "top15_momentum",
+      "avg_ann": 32.14655183282587,
+      "compound": 951.7443197780917,
+      "beats_bh": 7,
+      "sharpe_like": 1.3211553641515403
+    },
+    {
+      "strategy": "bottom10_meanrev",
+      "avg_ann": 38.305868572660266,
+      "compound": 930.4146620436363,
+      "beats_bh": 6,
+      "sharpe_like": 0.6606418532901726
+    },
+    {
+      "strategy": "bottom15_meanrev",
+      "avg_ann": 31.830738000820126,
+      "compound": 604.3710456316787,
+      "beats_bh": 6,
+      "sharpe_like": 0.6158110018684076
+    },
+    {
+      "strategy": "lowvol10",
+      "avg_ann": 11.627305715839016,
+      "compound": 159.19232274841625,
+      "beats_bh": 2,
+      "sharpe_like": 1.1607758297937043
+    }
+  ],
+  "years": [
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ]
+}
