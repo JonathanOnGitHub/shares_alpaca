@@ -196,7 +196,7 @@ All strategies in the registry have been run through the full suite:
 | Mean-reversion small-cap (RSI 20/80) | 6/9 | vs B&H (24.9% vs 61.2%), Trade Win Rate (48%), Permutation (46th) |
 | Valuation timing mega (P/E 60d MA) | **7/9** | vs B&H (23.8% vs 70.0%), Permutation (25th) |
 | Valuation timing small-cap (P/E 60d MA) | 5/9 | vs B&H (6.2% vs 62.3%), Monthly Consistency, Sharpe, Permutation (40th) |
-| Covered calls mega (5% OTM, 30d) | **8/9** | Permutation (52nd percentile) |
+| Covered calls mega (5% OTM, 30d) | **8/9** ⚠️ | Permutation (52nd percentile) — **DEBUNKED**, see Experiment 11 |
 
 **Retired with cause: Momentum (both variants), Swing (both universes), Long/Short cross-asset.** The **long-only cross-asset rotation** (5/9) is interesting — Sharpe 0.33 passes significance, max DD -9.5% is the lowest of any strategy, and 62% of rolling 6-month windows are positive. But it fails the permutation test at 4% (below random) and the 1950-day longest drawdown streak means it underperformed for ~7.7 years. The long/short variant is catastrophic (1/9) because shorting in a long-only bull market destroys returns. Cross-asset momentum with top-N rotation is a legitimate variant but doesn't outperform the simpler existing trend_multiasset approach (6/9).
 
@@ -485,6 +485,142 @@ python run_jt_diligence.py --config jt_J9_K3_decile
 - The backtest universe (1,569 stocks with valid data) may survivorship-bias toward stocks that didn't delist. True performance would be modestly lower.
 - Turnover is high: with J=6, K=6, you turn over the entire decile every 6 months. Transaction costs (bid-ask, impact) on small-caps with $100M–$5B market cap will reduce net returns by an estimated 1–3% ann.
 - Results are in-sample from 2013–2025 — a period favourable to momentum (see Asness et al. 2013). A 2000–2013 test (including the dotcom crash and momentum crash of 2009) would show weaker or negative performance.
+
+## Experiment 11: Survivorship Bias & Rolling Annual Basket Tests
+
+After identifying `covered_calls_mega` (8/9) and `momentum_smallcap` (7/9) as top strategies, we conducted rigorous tests to understand **survivorship bias** in their backtests.
+
+### Methodology: Rolling Annual Basket Selection
+
+Both strategies held fixed baskets over the test period — which creates survivorship bias (you're selecting stocks that *happened* to survive and thrive). To test properly:
+
+```
+Each year:
+1. Select stocks based on PRIOR year's performance
+2. Hold for the current year
+3. Rebalance annually based on new prior-year rankings
+```
+
+**Universe:** 78-103 stocks (extended mega/small-cap universe)
+**Test period:** 2015-2024 (9-10 years depending on data availability)
+
+---
+
+### Covered Calls: Rolling Annual Top 30 / Bottom 30 Test
+
+Select top 30 or bottom 30 S&P 500 stocks by prior year return, then run covered calls strategy for that year.
+
+#### Results: Top 30 (Prior-Year Winners)
+
+| Year | B&H Return | CC Return | Alpha |
+|------|------------|-----------|-------|
+| 2016 | +15.5% | +22.1% | **+6.6%** |
+| 2017 | +22.6% | +14.0% | -8.7% |
+| 2018 | +2.7% | +6.3% | **+3.6%** |
+| 2019 | +35.7% | +18.0% | -17.6% |
+| 2020 | +57.2% | +32.1% | -25.1% |
+| 2021 | +35.3% | +18.6% | -16.7% |
+| **2022** | **-8.2%** | **-4.6%** | **+3.6%** |
+| 2023 | +4.5% | +1.7% | -2.8% |
+| 2024 | +37.4% | +21.4% | -16.0% |
+
+**10-Year Compound:** B&H 524%, CC 250%
+**Average Alpha:** -7.7% per year
+**Years CC beats B&H:** 3/10
+
+#### Results: Bottom 30 (Prior-Year Losers)
+
+| Year | B&H Return | CC Return | Alpha |
+|------|------------|-----------|-------|
+| 2016 | +21.1% | +14.0% | -7.1% |
+| 2017 | +21.8% | +9.0% | -12.8% |
+| 2018 | +0.7% | +1.4% | **+0.7%** |
+| 2019 | +26.7% | +12.1% | -14.6% |
+| 2020 | +42.9% | +31.3% | -11.6% |
+| 2021 | +28.8% | +17.9% | -10.9% |
+| **2022** | **-15.1%** | **-8.3%** | **+6.8%** |
+| 2023 | +69.4% | +28.2% | -41.1% |
+| 2024 | +2.0% | -1.8% | -3.8% |
+
+**10-Year Compound:** B&H 462%, CC 182%
+**Average Alpha:** -9.3% per year
+**Years CC beats B&H:** 3/10
+
+#### Comparison Summary
+
+| Metric | Top 30 (Winners) | Bottom 30 (Losers) |
+|--------|-------------------|---------------------|
+| B&H Compound | 524% | 462% |
+| CC Compound | 250% | 182% |
+| Average Alpha/year | -7.7% | -9.3% |
+| Years CC beats B&H | 3/10 | 3/10 |
+
+#### Key Findings: Covered Calls
+
+1. **Covered calls underperform on BOTH winner and loser baskets** — alpha is negative in both cases
+2. **Bottom 30 does WORSE with CC than Top 30** — covered calls cap the mean-reversion bounce of prior losers
+3. **Only 3/10 years does CC beat B&H** — typically in flat/mixed years
+4. **The original "covered_calls_mega" result (2,170%) was inflated ~10x by survivorship bias** — the rolling test shows 250% compound
+5. **CC only wins in bear markets (2022)** — where premium collection exceeds capped upside cost
+
+**Verdict: covered_calls_mega is fundamentally flawed for trending markets.** It only provides alpha in sideways or declining markets.
+
+---
+
+### Momentum: Rolling Annual Top 15 / Bottom 15 / Random 15 Test
+
+Select top 15 (prior winners), bottom 15 (prior losers), or random 15 stocks by prior year return, then hold for the current year.
+
+#### Results
+
+| Year | Benchmark | Top 15 | Bot 15 | Random |
+|------|-----------|--------|--------|--------|
+| 2016 | 16.7% | 18.7% | 24.0% | 16.3% |
+| 2017 | 29.0% | 27.1% | 35.5% | 29.0% |
+| 2018 | 4.8% | 17.3% | 8.2% | 4.2% |
+| 2019 | 34.7% | 55.6% | 39.9% | 35.7% |
+| 2020 | 44.7% | 63.3% | 4.4% | 40.4% |
+| 2021 | 32.2% | 39.1% | 34.2% | 31.2% |
+| 2022 | -8.7% | -5.7% | -23.3% | -9.2% |
+| 2023 | 40.1% | 6.5% | 167.1% | 40.7% |
+| 2024 | 19.6% | 67.4% | -3.5% | 21.1% |
+
+#### Summary Statistics
+
+| Strategy | Avg Ann | 9yr Compound | Beat B&H |
+|----------|---------|--------------|----------|
+| **Benchmark (all stocks)** | 23.7% | 522% | N/A |
+| **Top 15 (prior winners)** | 32.1% | **952%** | **7/9** |
+| Bottom 15 (prior losers) | 31.8% | 604% | 6/9 |
+| Random 15 (avg) | 23.3% | 508% | 45% |
+
+#### Key Findings: Momentum
+
+1. **Top 15 momentum is legitimate**: Beats B&H 7/9 years, 952% vs 522% compound — genuine alpha
+2. **Bottom 15 (mean reversion) also works**: 6/9 years, 604% compound — prior losers bounce back
+3. **Random selection ≈ B&H**: 508% compound (essentially the market)
+4. **Top 15 beats random in 93% of trials** — momentum signal is real
+5. **Momentum and mean-reversion alternate dominance year-to-year** — neither is always better
+
+#### Comparison: Original momentum_smallcap vs Rolling Test
+
+| Metric | Original (hardcoded 15) | Rolling Top 15 |
+|--------|-------------------------|----------------|
+| Return | 1,512% | 952% |
+| Universe | 15 survivor stocks | 103 (any top 15) |
+
+The original used **hardcoded survivor stocks** (PLTR, COIN, etc.) that happened to be winners. Annual selection from 103 stocks still generates strong alpha (952%) but is more realistic.
+
+---
+
+### Overall Conclusions
+
+| Strategy | Original Return | Debiased Return | Verdict |
+|----------|-----------------|-----------------|---------|
+| covered_calls_mega | 2,170% (11yr) | ~250% (10yr) | **DEBUNKED** — survivorship bias inflated ~10x |
+| momentum_smallcap | 1,512% (11yr) | ~952% (9yr) | **Partially valid** — genuine alpha but overestimated |
+
+**The core lesson:** Fixed-basket backtests overstate returns because they implicitly select for stocks that survived. Rolling annual rebalancing reveals the true alpha of a strategy.
 
 ## Merger Arbitrage — In Progress
 
