@@ -1,0 +1,54 @@
+{
+  "top_15": {
+    "stocks": [
+      "NVDA",
+      "AMD",
+      "AVGO",
+      "TSLA",
+      "NFLX",
+      "AMZN",
+      "MSFT",
+      "GOOGL",
+      "AAPL",
+      "META",
+      "COST",
+      "MA",
+      "JPM",
+      "V",
+      "ABBV"
+    ],
+    "bh_return": 2464,
+    "strategy_return": 3489,
+    "alpha": 1024,
+    "sharpe": 1.16,
+    "max_drawdown": -56,
+    "diligence": "7/9",
+    "permutation": "70th"
+  },
+  "bottom_15": {
+    "stocks": [
+      "ADBE",
+      "WMT",
+      "TMO",
+      "CRM",
+      "HD",
+      "UNH",
+      "CSCO",
+      "BAC",
+      "MRK",
+      "JNJ",
+      "CVX",
+      "PG",
+      "XOM",
+      "DIS",
+      "PFE"
+    ],
+    "bh_return": 281,
+    "strategy_return": 137,
+    "alpha": -145,
+    "sharpe": 0.68,
+    "max_drawdown": -27,
+    "diligence": "6/9",
+    "permutation": "38th"
+  }
+}
