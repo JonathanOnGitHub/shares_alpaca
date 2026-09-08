@@ -1,0 +1,82 @@
+{
+  "strategy": "covered_calls_mega_2015_2026",
+  "passed": 8,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "True",
+      "detail": "Strategy 2151.2% vs B&H 496.9%",
+      "metrics": {
+        "Strategy Return": "2151.19%",
+        "B&H Return": "496.91%",
+        "Strategy Sharpe": "1.13",
+        "B&H Sharpe": "0.96"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (23.0%): 1738.9% (total: 2161.3%)",
+      "metrics": {
+        "Best Month": "22.97%",
+        "Return (all)": "2161.30%",
+        "Return (excl)": "1738.87%",
+        "Attributed to 1 month": "20%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "2/2 winning trades (100%)",
+      "metrics": {
+        "Win Rate": "100.0%",
+        "Trades": "2"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": true,
+      "detail": "Max DD: -49.3%, longest streak: 384 days",
+      "metrics": {
+        "Max DD": "-49.32%",
+        "Longest DD Days": "384"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "107/126 rolling 6m windows positive, monthly Sharpe: 0.35",
+      "metrics": {
+        "Positive 6m Windows": "107/126 (85%)",
+        "Monthly Sharpe": "0.35"
+      }
+    },
+    "Trade Concentration": {
+      "passed": true,
+      "detail": "Only 2 trades \u2014 insufficient for analysis",
+      "metrics": {}
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 178.3%, Second half: 715.7%",
+      "metrics": {
+        "First Half Return": "178.33%",
+        "Second Half Return": "715.65%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 1.23 vs threshold 0.17 for N=131 months",
+      "metrics": {
+        "Annual Sharpe": "1.23",
+        "Significance Threshold": "0.17"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (2170.2%) beats 86% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "2170.22%",
+        "Random Median": "625.89%",
+        "Percentile Rank": "86.4%"
+      }
+    }
+  },
+  "timestamp_utc": "20260908"
+}
