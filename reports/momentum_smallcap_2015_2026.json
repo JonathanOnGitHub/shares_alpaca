@@ -1,0 +1,86 @@
+{
+  "strategy": "momentum_smallcap_2015_2026",
+  "passed": 7,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "True",
+      "detail": "Strategy 1479.8% vs B&H 448.9%",
+      "metrics": {
+        "Strategy Return": "1479.78%",
+        "B&H Return": "448.93%",
+        "Strategy Sharpe": "0.87",
+        "B&H Sharpe": "0.68"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (59.7%): 822.8% (total: 1373.3%)",
+      "metrics": {
+        "Best Month": "59.65%",
+        "Return (all)": "1373.30%",
+        "Return (excl)": "822.81%",
+        "Attributed to 1 month": "40%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "320/574 winning trades (56%)",
+      "metrics": {
+        "Win Rate": "55.7%",
+        "Trades": "574"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": "False",
+      "detail": "Max DD: -79.7%, longest streak: 684 days",
+      "metrics": {
+        "Max DD": "-79.68%",
+        "Longest DD Days": "684"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "76/109 rolling 6m windows positive, monthly Sharpe: 0.24",
+      "metrics": {
+        "Positive 6m Windows": "76/109 (70%)",
+        "Monthly Sharpe": "0.24"
+      }
+    },
+    "Trade Concentration": {
+      "passed": "True",
+      "detail": "Top 1 trade: 2% of total PnL, Top 3: 4%",
+      "metrics": {
+        "Top Trade Share": "1.5%",
+        "Top 3 Share": "4.1%",
+        "Total Trades": "574"
+      }
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 767.0%, Second half: 82.2%",
+      "metrics": {
+        "First Half Return": "767.02%",
+        "Second Half Return": "82.21%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 0.83 vs threshold 0.19 for N=114 months",
+      "metrics": {
+        "Annual Sharpe": "0.83",
+        "Significance Threshold": "0.19"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (1479.8%) beats 67% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "1479.78%",
+        "Random Median": "500.30%",
+        "Percentile Rank": "67.4%"
+      }
+    }
+  },
+  "timestamp_utc": "20260908"
+}
