@@ -1,0 +1,84 @@
+{
+  "strategy": "J=9, K=3, top quintile",
+  "passed": 2,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": false,
+      "detail": "Strategy 3.9% vs B&H 97.4%",
+      "metrics": {
+        "Strategy Return": "3.89%",
+        "B&H Return": "97.36%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "False",
+      "detail": "Without best (15.6%): -9.3% (total: 4.8%)",
+      "metrics": {
+        "Best Month": "15.62%",
+        "Return (all)": "4.85%",
+        "Return (excl)": "-9.32%",
+        "Attributed to 1 month": "292%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "72/106 winning trades (68%)",
+      "metrics": {
+        "Win Rate": "67.9%",
+        "Trades": "106"
+      }
+    },
+    "Max Drawdown": {
+      "passed": false,
+      "detail": "Max DD: -56.6%, longest drawdown: 743 days",
+      "metrics": {
+        "Max DD": "-56.57%",
+        "Max Duration (days)": "743"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "50/102 positive months (49%)",
+      "metrics": {
+        "Positive Months": "50/102",
+        "Rate": "49.0%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 19/106 trades (18%) = 50% of PnL",
+      "metrics": {
+        "Top N% of trades": "18%",
+        "PnL share": "50%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "False",
+      "detail": "1st half: 54.8%, 2nd half: -32.8%",
+      "metrics": {
+        "1st Half Return": "54.84%",
+        "2nd Half Return": "-32.75%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "False",
+      "detail": "t=0.36 (need t>2.0 for significance at 5%)",
+      "metrics": {
+        "t-statistic": "0.359",
+        "Sharpe (daily)": "0.121"
+      }
+    },
+    "Permutation Test": {
+      "passed": "False",
+      "detail": "t=0.36 vs null (t\u22642.0) \u2014 0th percentile of shuffled",
+      "metrics": {
+        "Strategy Return": "3.89%",
+        "t-statistic": "0.359",
+        "Cross-sectional Research t-stat": "4.34",
+        "Percentile (shuffled)": "0.0%"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T192605Z"
+}

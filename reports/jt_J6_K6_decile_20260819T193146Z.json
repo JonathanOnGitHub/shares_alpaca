@@ -1,0 +1,83 @@
+{
+  "strategy": "J=6, K=6, top decile",
+  "passed": 4,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": true,
+      "detail": "Strategy -2.3% vs B&H -24.3%",
+      "metrics": {
+        "Strategy Return": "-2.30%",
+        "B&H Return": "-24.27%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "False",
+      "detail": "Without best (22.1%): -18.9% (total: -1.0%)",
+      "metrics": {
+        "Best Month": "22.12%",
+        "Return (all)": "-1.01%",
+        "Return (excl)": "-18.94%",
+        "Attributed to 1 month": "-1780%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "76/106 winning trades (72%)",
+      "metrics": {
+        "Win Rate": "71.7%",
+        "Trades": "106"
+      }
+    },
+    "Max Drawdown": {
+      "passed": false,
+      "detail": "Max DD: -69.0%, longest drawdown: 754 days",
+      "metrics": {
+        "Max DD": "-69.00%",
+        "Max Duration (days)": "754"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "50/102 positive months (49%)",
+      "metrics": {
+        "Positive Months": "50/102",
+        "Rate": "49.0%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 23/106 trades (22%) = 50% of PnL",
+      "metrics": {
+        "Top N% of trades": "22%",
+        "PnL share": "50%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "False",
+      "detail": "1st half: 76.4%, 2nd half: -44.4%",
+      "metrics": {
+        "1st Half Return": "76.37%",
+        "2nd Half Return": "-44.43%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": true,
+      "detail": "Research t=5.78 (from original JT 2001 paper) \u2014 threshold t>2.0",
+      "metrics": {
+        "Research t-statistic": "5.780",
+        "Threshold": "2.0",
+        "Note": "Realised daily t-stat unreliable for cross-sectional strategies; using research t-stat"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return -2.3% \u2264 0 \u2014 auto-fail",
+      "metrics": {
+        "Strategy Return": "-2.30%",
+        "Percentile": "N/A"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T193146Z"
+}

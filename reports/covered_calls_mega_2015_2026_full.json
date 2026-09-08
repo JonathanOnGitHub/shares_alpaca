@@ -1,0 +1,36 @@
+{
+  "strategy": "covered_calls_mega_2015_2026",
+  "passed": null,
+  "total": 9,
+  "params": {
+    "strike_otm_pct": 0.05,
+    "vol_window": 20,
+    "days_to_expiry": 30,
+    "rebal_days": 21,
+    "max_position_pct": 0.1,
+    "max_open_positions": 8,
+    "initial_capital": 100000.0,
+    "slippage_pct": 0.001,
+    "commission_pct": 0.0
+  },
+  "metrics": {
+    "total_return": "2170.2%",
+    "annual_return": "32.9%",
+    "sharpe": "1.14",
+    "max_drawdown": "-49.3%",
+    "win_rate": "100.0%",
+    "total_trades": 2,
+    "buy_hold_total": "921.0%",
+    "excess_return": "1249.2%"
+  },
+  "trade_breakdown": {
+    "buy": 10,
+    "sell_call": 10,
+    "sell": 2,
+    "call_assigned": 2,
+    "call_expired": 8
+  },
+  "equity_curve_start": "2015-01-02 00:00:00",
+  "equity_curve_end": "2025-12-30 00:00:00",
+  "num_symbols": 30
+}

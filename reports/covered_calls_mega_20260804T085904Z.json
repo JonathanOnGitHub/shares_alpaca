@@ -1,0 +1,93 @@
+{
+  "strategy": "covered_calls_mega",
+  "passed": 8,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": "True",
+      "detail": "Strategy 93.5% vs B&H 68.1%",
+      "metrics": {
+        "Strategy Return": "93.47%",
+        "B&H Return": "68.11%",
+        "Strategy Sharpe": "1.19",
+        "B&H Sharpe": "0.88"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best month (9.1%): 81.2% (total: 97.7%)",
+      "metrics": {
+        "Best Month": "9.10%",
+        "Return (all)": "97.72%",
+        "Return (excl)": "81.23%",
+        "Attributed to 1 month": "17%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "4/4 winning trades (100%)",
+      "metrics": {
+        "Win Rate": "100.0%",
+        "Trades": "4"
+      }
+    },
+    "Max Drawdown Analysis": {
+      "passed": true,
+      "detail": "Max DD: -17.2%, longest streak: 157 days",
+      "metrics": {
+        "Max DD": "-17.15%",
+        "Longest DD Days": "157"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "True",
+      "detail": "39/44 rolling 6m windows positive, monthly Sharpe: 0.41",
+      "metrics": {
+        "Positive 6m Windows": "39/44 (89%)",
+        "Monthly Sharpe": "0.41"
+      }
+    },
+    "Trade Concentration": {
+      "passed": true,
+      "detail": "Only 4 trades \u2014 insufficient for analysis",
+      "metrics": {}
+    },
+    "Sub-Period Consistency": {
+      "passed": "True",
+      "detail": "First half: 56.0%, Second half: 25.1%",
+      "metrics": {
+        "First Half Return": "55.98%",
+        "Second Half Return": "25.10%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "True",
+      "detail": "Sharpe 1.43 vs threshold 0.29 for N=49 months",
+      "metrics": {
+        "Annual Sharpe": "1.43",
+        "Significance Threshold": "0.29"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return (95.1%) beats 52% of 500 random return sequences drawn from the same universe",
+      "metrics": {
+        "Strategy Return": "95.14%",
+        "Random Median": "89.19%",
+        "Percentile Rank": "52.4%"
+      }
+    }
+  },
+  "timestamp_utc": "20260804T085904Z",
+  "params": {
+    "strike_otm_pct": 0.05,
+    "vol_window": 20,
+    "days_to_expiry": 30,
+    "rebal_days": 21,
+    "max_position_pct": 0.1,
+    "max_open_positions": 8,
+    "initial_capital": 100000.0,
+    "slippage_pct": 0.001,
+    "commission_pct": 0.0
+  }
+}

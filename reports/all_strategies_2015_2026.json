@@ -1,0 +1,79 @@
+{
+  "covered_calls_mega": {
+    "name": "covered_calls_mega",
+    "total_return": 2170.219577236395,
+    "annual_return": 32.90652806950718,
+    "sharpe": 1.1351281141804896,
+    "max_drawdown": -49.31690361856959,
+    "win_rate": 100.0,
+    "num_trades": 2,
+    "diligence_passed": 8,
+    "diligence_total": 9
+  },
+  "momentum_smallcap": {
+    "name": "momentum_smallcap",
+    "total_return": 1511.5301629819435,
+    "annual_return": 34.25570607662542,
+    "sharpe": 0.8794295715710978,
+    "max_drawdown": -79.68006744611374,
+    "win_rate": 0,
+    "num_trades": 580,
+    "diligence_passed": 7,
+    "diligence_total": 9
+  },
+  "val_timing_mega": {
+    "name": "val_timing_mega",
+    "total_return": 14.776664715760468,
+    "annual_return": 1.2635246143235745,
+    "sharpe": 0.25898872625858654,
+    "max_drawdown": -18.045573735358648,
+    "win_rate": 78.0701754385965,
+    "num_trades": 228,
+    "diligence_passed": 4,
+    "diligence_total": 9
+  },
+  "lowvol_small_inverse": {
+    "name": "lowvol_small_inverse",
+    "total_return": 951.7467561534289,
+    "annual_return": 25.290160301567035,
+    "sharpe": 0.848261781390844,
+    "max_drawdown": -58.86246404665353,
+    "win_rate": 42.3562412342216,
+    "num_trades": 1426,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  },
+  "lowvol_small_quality": {
+    "name": "lowvol_small_quality",
+    "total_return": 854.2085046894055,
+    "annual_return": 24.127200588511766,
+    "sharpe": 0.8071698482974761,
+    "max_drawdown": -57.48974868997809,
+    "win_rate": 38.218793828892004,
+    "num_trades": 1426,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  },
+  "meanrev_mega": {
+    "name": "meanrev_mega",
+    "total_return": 249.75888397853424,
+    "annual_return": 12.08326001664104,
+    "sharpe": 1.4717417772369934,
+    "max_drawdown": -7.77525451674872,
+    "win_rate": 43.65911396685831,
+    "num_trades": 2957,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  },
+  "meanrev_small": {
+    "name": "meanrev_small",
+    "total_return": 157.14864028875343,
+    "annual_return": 8.985912287844133,
+    "sharpe": 0.9231946795620553,
+    "max_drawdown": -29.272236578538614,
+    "win_rate": 43.666169895678095,
+    "num_trades": 1342,
+    "diligence_passed": 5,
+    "diligence_total": 9
+  }
+}

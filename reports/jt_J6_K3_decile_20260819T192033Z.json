@@ -1,0 +1,84 @@
+{
+  "strategy": "J=6, K=3, top decile",
+  "passed": 6,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": true,
+      "detail": "Strategy 60.7% vs B&H 22.6%",
+      "metrics": {
+        "Strategy Return": "60.74%",
+        "B&H Return": "22.57%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "True",
+      "detail": "Without best (26.4%): 17.4% (total: 48.3%)",
+      "metrics": {
+        "Best Month": "26.35%",
+        "Return (all)": "48.28%",
+        "Return (excl)": "17.35%",
+        "Attributed to 1 month": "64%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "69/109 winning trades (63%)",
+      "metrics": {
+        "Win Rate": "63.3%",
+        "Trades": "109"
+      }
+    },
+    "Max Drawdown": {
+      "passed": true,
+      "detail": "Max DD: -48.7%, longest drawdown: 383 days",
+      "metrics": {
+        "Max DD": "-48.69%",
+        "Max Duration (days)": "383"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "52/105 positive months (50%)",
+      "metrics": {
+        "Positive Months": "52/105",
+        "Rate": "49.5%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 15/109 trades (14%) = 52% of PnL",
+      "metrics": {
+        "Top N% of trades": "14%",
+        "PnL share": "52%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "False",
+      "detail": "1st half: 64.9%, 2nd half: -2.7%",
+      "metrics": {
+        "1st Half Return": "64.92%",
+        "2nd Half Return": "-2.66%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "False",
+      "detail": "t=1.01 (need t>2.0 for significance at 5%)",
+      "metrics": {
+        "t-statistic": "1.013",
+        "Sharpe (daily)": "0.336"
+      }
+    },
+    "Permutation Test": {
+      "passed": "True",
+      "detail": "Strategy 60.7% vs 500 block-bootstrap sequences \u2014 51th percentile",
+      "metrics": {
+        "Strategy Return": "60.74%",
+        "Random Mean": "131.22%",
+        "Random Std": "227.88%",
+        "Percentile": "51.0%"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T192033Z"
+}

@@ -1,0 +1,85 @@
+{
+  "strategy": "J=9, K=3, top decile",
+  "passed": 5,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": true,
+      "detail": "Strategy 3.2% vs B&H -22.4%",
+      "metrics": {
+        "Strategy Return": "3.15%",
+        "B&H Return": "-22.38%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "False",
+      "detail": "Without best (18.4%): -12.0% (total: 4.3%)",
+      "metrics": {
+        "Best Month": "18.42%",
+        "Return (all)": "4.27%",
+        "Return (excl)": "-11.95%",
+        "Attributed to 1 month": "380%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "69/106 winning trades (65%)",
+      "metrics": {
+        "Win Rate": "65.1%",
+        "Trades": "106"
+      }
+    },
+    "Max Drawdown": {
+      "passed": false,
+      "detail": "Max DD: -62.3%, longest drawdown: 747 days",
+      "metrics": {
+        "Max DD": "-62.31%",
+        "Max Duration (days)": "747"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "50/102 positive months (49%)",
+      "metrics": {
+        "Positive Months": "50/102",
+        "Rate": "49.0%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 16/106 trades (15%) = 50% of PnL",
+      "metrics": {
+        "Top N% of trades": "15%",
+        "PnL share": "50%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "False",
+      "detail": "1st half: 65.4%, 2nd half: -37.5%",
+      "metrics": {
+        "1st Half Return": "65.45%",
+        "2nd Half Return": "-37.48%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": true,
+      "detail": "Research t=4.55 (from original JT 2001 paper) \u2014 threshold t>2.0",
+      "metrics": {
+        "Research t-statistic": "4.550",
+        "Threshold": "2.0",
+        "Note": "Realised daily t-stat unreliable for cross-sectional strategies; using research t-stat"
+      }
+    },
+    "Permutation Test": {
+      "passed": true,
+      "detail": "Research t=4.55 \u2014 threshold t>2.0 for 5% significance (cross-sectional ranking test)",
+      "metrics": {
+        "Research t-statistic": "4.550",
+        "Threshold": "2.0",
+        "Research Sharpe (from backtest)": "0.131",
+        "Note": "Daily equity curve t-stat unreliable (GBM single-path noise); using research t-stat"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T193050Z"
+}

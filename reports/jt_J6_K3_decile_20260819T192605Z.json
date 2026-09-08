@@ -1,0 +1,82 @@
+{
+  "strategy": "J=6, K=3, top decile",
+  "passed": 2,
+  "total": 9,
+  "checks": {
+    "vs Equal-Weight B&H": {
+      "passed": false,
+      "detail": "Strategy -4.1% vs B&H 84.0%",
+      "metrics": {
+        "Strategy Return": "-4.14%",
+        "B&H Return": "83.96%"
+      }
+    },
+    "Best Month Exclusion": {
+      "passed": "False",
+      "detail": "Without best (19.4%): -18.7% (total: -3.0%)",
+      "metrics": {
+        "Best Month": "19.37%",
+        "Return (all)": "-2.99%",
+        "Return (excl)": "-18.73%",
+        "Attributed to 1 month": "-527%"
+      }
+    },
+    "Trade Win Rate": {
+      "passed": true,
+      "detail": "69/109 winning trades (63%)",
+      "metrics": {
+        "Win Rate": "63.3%",
+        "Trades": "109"
+      }
+    },
+    "Max Drawdown": {
+      "passed": false,
+      "detail": "Max DD: -64.8%, longest drawdown: 767 days",
+      "metrics": {
+        "Max DD": "-64.78%",
+        "Max Duration (days)": "767"
+      }
+    },
+    "Monthly Consistency": {
+      "passed": "False",
+      "detail": "51/105 positive months (49%)",
+      "metrics": {
+        "Positive Months": "51/105",
+        "Rate": "48.6%"
+      }
+    },
+    "Concentration": {
+      "passed": true,
+      "detail": "Top 15/109 trades (14%) = 52% of PnL",
+      "metrics": {
+        "Top N% of trades": "14%",
+        "PnL share": "52%"
+      }
+    },
+    "Sub-period Stability": {
+      "passed": "False",
+      "detail": "1st half: 57.4%, 2nd half: -39.2%",
+      "metrics": {
+        "1st Half Return": "57.43%",
+        "2nd Half Return": "-39.18%"
+      }
+    },
+    "Sharpe Significance": {
+      "passed": "False",
+      "detail": "t=0.31 (need t>2.0 for significance at 5%)",
+      "metrics": {
+        "t-statistic": "0.310",
+        "Sharpe (daily)": "0.103"
+      }
+    },
+    "Permutation Test": {
+      "passed": false,
+      "detail": "Strategy return -4.1% \u2264 0 \u2014 auto-fail",
+      "metrics": {
+        "Strategy Return": "-4.14%",
+        "Percentile": "N/A"
+      }
+    }
+  },
+  "timestamp_utc": "20260819T192605Z"
+}

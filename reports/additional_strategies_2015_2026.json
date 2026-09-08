@@ -1,0 +1,82 @@
+{
+  "swing_mega": {
+    "name": "swing_mega",
+    "total_return": 11.196069633322182,
+    "annual_return": 0.971553376826173,
+    "sharpe": 0.3598880627493033,
+    "max_drawdown": -5.795506638586301,
+    "win_rate": 51.533742331288344,
+    "num_trades": 163,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  },
+  "swing_smallcap": {
+    "name": "swing_smallcap",
+    "total_return": 27.513883211866407,
+    "annual_return": 2.239083970613054,
+    "sharpe": 0.7962081830215225,
+    "max_drawdown": -5.653416705405756,
+    "win_rate": 44.73684210526316,
+    "num_trades": 76,
+    "diligence_passed": 5,
+    "diligence_total": 9
+  },
+  "ma_timing_spy_50d": {
+    "name": "ma_timing_spy_50d",
+    "total_return": -99.99999999963141,
+    "annual_return": -90.91469658965691,
+    "sharpe": 1.2674350306909208,
+    "max_drawdown": -108.83124847736896,
+    "win_rate": 0.0,
+    "num_trades": 2455,
+    "diligence_passed": 3,
+    "diligence_total": 9
+  },
+  "ma_timing_spy_100d": {
+    "name": "ma_timing_spy_100d",
+    "total_return": -99.99999999963141,
+    "annual_return": -90.91469658965691,
+    "sharpe": 1.2674350306909208,
+    "max_drawdown": -108.83124847736896,
+    "win_rate": 0.0,
+    "num_trades": 2455,
+    "diligence_passed": 3,
+    "diligence_total": 9
+  },
+  "ma_timing_spy_200d": {
+    "name": "ma_timing_spy_200d",
+    "total_return": -99.99999999963141,
+    "annual_return": -90.91469658965691,
+    "sharpe": 1.2674350306909208,
+    "max_drawdown": -108.83124847736896,
+    "win_rate": 0.0,
+    "num_trades": 2455,
+    "diligence_passed": 3,
+    "diligence_total": 9
+  },
+  "trend_multiasset": null,
+  "crossasset_rot_long": null,
+  "crossasset_rot_ls": null,
+  "lowvol_mega_inverse": {
+    "name": "lowvol_mega_inverse",
+    "total_return": 239.80296762351338,
+    "annual_return": 12.434826500009377,
+    "sharpe": 0.8422732798173664,
+    "max_drawdown": -27.558934358106857,
+    "win_rate": 19.274193548387096,
+    "num_trades": 3720,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  },
+  "lowvol_mega_quality": {
+    "name": "lowvol_mega_quality",
+    "total_return": 219.64641914120116,
+    "annual_return": 11.777964804120566,
+    "sharpe": 0.8045215220547223,
+    "max_drawdown": -27.252608483493855,
+    "win_rate": 17.36559139784946,
+    "num_trades": 3720,
+    "diligence_passed": 6,
+    "diligence_total": 9
+  }
+}

@@ -206,25 +206,39 @@ All strategies rank 17-30th percentile vs random — their returns are not stati
 
 ---
 
-## All Strategies Ranked by Diligence Score
+## All Strategies Ranked by Diligence Score (2015-2026, Same Period)
 
-| Rank | Strategy | Passed | Pct |
-|------|----------|--------|-----|
-| 1-2 | covered_calls_mega, momentum_smallcap | 8/9 | 89% |
-| 3-6 | lowvol_small_inverse, lowvol_small_quality, swing_mega, val_timing_mega | 7/9 | 78% |
-| 7-15 | jt_J6_K6_quintile, ma_timing_spy (50d,100d), meanrev_mega/small, **sma100**, swing_smallcap, trend_multiasset | 6/9 | 67% |
-| 16-21 | crossasset_rot_long, momentum_smallcap_ls, **sma200/250/300**, val_timing_small | 5/9 | 56% |
-| 22-26 | ensemble_mega, jt_J6/K9 variants, lowvol_mega_inverse | 4/9 | 44% |
-| 27-28 | jt_J6_K3_decile, lowvol_mega_quality | 3/9 | 33% |
-| 29-30 | crossasset_rot_ls, lowvol_mega_minvar | 1/9 | 11% |
+| Rank | Strategy | Total Ret | Ann Ret | Sharpe | Max DD | Dil |
+|------|----------|-----------|---------|--------|--------|-----|
+| 1 | **covered_calls_mega** | 2,170% | 33% | 1.14 | -49% | **8/9** |
+| 2 | momentum_smallcap | 1,512% | 34% | 0.88 | -80% | 7/9 |
+| 3 | lowvol_small_inverse | 952% | 25% | 0.85 | -59% | 6/9 |
+| 4 | lowvol_small_quality | 854% | 24% | 0.81 | -57% | 6/9 |
+| 5 | meanrev_mega | 250% | 12% | **1.47** | -8% | 6/9 |
+| 6 | lowvol_mega_inverse | 240% | 12% | 0.84 | -28% | 6/9 |
+| 7 | lowvol_mega_quality | 220% | 12% | 0.80 | -27% | 6/9 |
+| 8 | swing_mega | 11% | 1% | 0.36 | -6% | 6/9 |
+| 9 | meanrev_small | 157% | 9% | 0.92 | -29% | 5/9 |
+| 10 | swing_smallcap | 28% | 2% | 0.80 | -6% | 5/9 |
+| 11 | val_timing_mega | 15% | 1% | 0.26 | -18% | 4/9 |
 
-**Total: 30 strategies tested**
+**Total: 11 strategies tested over same 11-year period**
 
 ### Key Observations
-- **Covered calls & momentum** are the only strategies to pass 8/9 checks
-- **SMA100 (6/9)** ranks tied 13th — best among the SMAs
-- **Long/short strategies** generally underperform long-only versions
-- **Low-vol small-cap** strategies do well (7/9), but low-vol mega-cap variants do poorly (1-4/9)
+- **Covered calls mega is the clear winner** — 2,170% return with 8/9 diligence
+- **Mean reversion mega has the best Sharpe** (1.47) but modest returns (250%)
+- **Low-vol strategies dominate the middle tier** (3-7) — consistent but not spectacular
+- **Valuation timing fails catastrophically** in this growth bull market (only 15% return)
+- **Momentum smallcap is the best risk-adjusted runner-up** with 1,512% return
+
+### Strategy Category Performance
+| Category | Best Performer | Return | Sharpe | Diligence |
+|----------|---------------|--------|--------|-----------|
+| Options Income | covered_calls_mega | 2,170% | 1.14 | 8/9 |
+| Momentum | momentum_smallcap | 1,512% | 0.88 | 7/9 |
+| Low Vol | lowvol_small_inverse | 952% | 0.85 | 6/9 |
+| Mean Reversion | meanrev_mega | 250% | 1.47 | 6/9 |
+| Valuation | val_timing_mega | 15% | 0.26 | 4/9 |
 
 ---
 
