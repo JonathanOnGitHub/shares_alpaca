@@ -652,13 +652,50 @@ Select the 10 lowest-volatility stocks based on prior year (252-day rolling vol)
 
 ### Overall Conclusions
 
-| Strategy | Original Return | Debiased Return | Verdict |
-|----------|-----------------|-----------------|---------|
-| covered_calls_mega | 2,170% (11yr) | ~250% (10yr) | **DEBUNKED** — survivorship bias inflated ~10x |
-| momentum_smallcap | 1,512% (11yr) | ~952% (9yr) | **Partially valid** — genuine alpha but overestimated |
-| lowvol_small_inverse | 952% (11yr) | ~166% (9yr) | **DEBUNKED** — survivorship bias inflated ~6x, only beats B&H 2/9 years |
+#### Complete Debiased League Table
 
-**The core lesson:** Fixed-basket backtests overstate returns because they implicitly select for stocks that survived. Rolling annual rebalancing reveals the true alpha of a strategy.
+| Rank | Strategy | Original | Debiased | Dil | Verdict |
+|------|----------|----------|----------|-----|---------|
+| 1 | highvol10 (growth proxy) | N/A | 5,754% | N/A | Market Proxy |
+| 2 | top10_momentum | N/A | 1,356% | N/A | **VALID** — 7/9 yrs beat B&H |
+| 3 | momentum_smallcap | 1,512% | 952% | 7/9 | **VALID** — genuine alpha |
+| 4 | bottom10_meanrev | N/A | 930% | N/A | **VALID** — losers bounce |
+| 5 | meanrev_mega | 250% | ~600% | 6/9 | **LIKELY VALID** |
+| 6 | covered_calls_mega | 2,170% | ~250% | 8/9 ⚠️ | **DEBUNKED** — 9x inflation |
+| 7 | lowvol_small_quality | 854% | ~200% | 6/9 | **LIKELY DEBUNKED** |
+| 8 | lowvol_small_inverse | 952% | ~159% | 6/9 | **DEBUNKED** — 6x inflation |
+| 9 | lowvol_mega_inverse | 240% | ~150% | 6/9 | **LIKELY DEBUNKED** |
+| 10 | lowvol_mega_quality | 220% | ~150% | 6/9 | **LIKELY DEBUNKED** |
+| 11 | swing_mega | 11% | ? | 6/9 | **UNTESTED** |
+| 12 | meanrev_small | 157% | ? | 5/9 | **UNTESTED** |
+| 13 | swing_smallcap | 28% | ? | 5/9 | **UNTESTED** |
+| 14 | val_timing_mega | 15% | ? | 4/9 | **UNTESTED** |
+
+**Benchmark:** 522% (equal-weight all stocks) | **Random 15:** ~508%
+
+#### Survivorship Bias Summary
+
+| Strategy | Original | Debiased | Inflation | Verdict |
+|----------|----------|----------|-----------|---------|
+| covered_calls_mega | 2,170% | ~250% | **~9x** | ⚠️ DEBUNKED |
+| lowvol_small_inverse | 952% | ~159% | **~6x** | ⚠️ DEBUNKED |
+| momentum_smallcap | 1,512% | 952% | **~1.6x** | ✓ VALID |
+| meanrev_mega | 250% | ~600% | N/A | ✓ LIKELY VALID |
+
+#### Key Findings
+
+1. **Only momentum strategies survive debiasing**: Top 10/15 by prior year returns genuinely beat B&H 7-8/9 years
+2. **Mean reversion also works**: Buying prior losers (bottom 10/15) generates alpha from bounce-back
+3. **Low volatility is a BULL MARKET TRAP**: Debunked — only beats B&H 2/9 years, worse than random
+4. **Covered calls only work in flat/declining markets**: Debunked — premium doesn't compensate for capped upside
+5. **"High volatility" is just growth stocks**: 5,754% return mirrors the bull market, not skill
+
+#### The Core Lesson
+
+**Fixed-basket backtests overstate returns by 2-10x** because they implicitly select stocks that survived and thrived. Rolling annual rebalancing reveals the true alpha of a strategy.
+
+**Market parity baseline:** Benchmark (522%) ≈ Random 15 (508%)
+Any strategy claiming >600%+ needs to demonstrate it's not just survivorship bias.
 
 ## Merger Arbitrage — In Progress
 
