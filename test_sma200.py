@@ -114,16 +114,18 @@ def run_diligence_checks(result, data, strategy_name="SMA"):
 
 def print_comparison(results: dict, bh: dict):
     """Print a comparison table of all strategies."""
-    print("\n" + "=" * 70)
-    print("COMPARISON: SMA100 vs SMA200 vs Buy & Hold")
-    print("=" * 70)
-    print(f"{'Strategy':<15} {'Total Ret':>12} {'Ann Ret':>10} {'Sharpe':>8} {'Max DD':>10} {'Win Rate':>10} {'Trades':>8}")
-    print("-" * 70)
+    print("\n" + "=" * 85)
+    print("COMPARISON: SMA100 vs SMA200 vs SMA250 vs SMA300 vs Buy & Hold")
+    print("=" * 85)
+    print(f"{'Strategy':<12} {'Total Ret':>12} {'Ann Ret':>10} {'Sharpe':>8} {'Max DD':>10} {'Win Rate':>10} {'Trades':>8}")
+    print("-" * 85)
     
-    print(f"{'SMA100':<15} {results['sma100'].total_return*100:>11.1f}% {results['sma100'].annualized_return*100:>9.1f}% {results['sma100'].sharpe_ratio:>8.2f} {results['sma100'].max_drawdown*100:>9.1f}% {results['sma100'].win_rate*100:>9.1f}% {results['sma100'].total_trades:>8}")
-    print(f"{'SMA200':<15} {results['sma200'].total_return*100:>11.1f}% {results['sma200'].annualized_return*100:>9.1f}% {results['sma200'].sharpe_ratio:>8.2f} {results['sma200'].max_drawdown*100:>9.1f}% {results['sma200'].win_rate*100:>9.1f}% {results['sma200'].total_trades:>8}")
-    print(f"{'Buy & Hold':<15} {bh['total_return']*100:>11.1f}% {bh['annual_return']*100:>9.1f}% {bh['sharpe']*100:>8.1f} {bh['max_drawdown']*100:>9.1f}% {'N/A':>10} {'N/A':>8}")
-    print("=" * 70)
+    for sma in ["sma100", "sma200", "sma250", "sma300"]:
+        r = results[sma]
+        print(f"{sma.upper():<12} {r.total_return*100:>11.1f}% {r.annualized_return*100:>9.1f}% {r.sharpe_ratio:>8.2f} {r.max_drawdown*100:>9.1f}% {r.win_rate*100:>9.1f}% {r.total_trades:>8}")
+    
+    print(f"{'Buy & Hold':<12} {bh['total_return']*100:>11.1f}% {bh['annual_return']*100:>9.1f}% {bh['sharpe']:>8.2f} {bh['max_drawdown']*100:>9.1f}% {'N/A':>10} {'N/A':>8}")
+    print("=" * 85)
 
 
 def main():
@@ -131,6 +133,7 @@ def main():
     start = "2015-01-01"
     end = "2025-01-01"
     initial_capital = 100000
+    sma_periods = [100, 200, 250, 300]
 
     print(f"Fetching data for {len(symbols)} symbols...")
     data = fetch_data(symbols, start, end)
@@ -143,43 +146,37 @@ def main():
 
     print("\nRunning strategies...")
 
-    results = {
-        "sma100": run_strategy(100, data, initial_capital),
-        "sma200": run_strategy(200, data, initial_capital),
-    }
+    results = {f"sma{p}": run_strategy(p, data, initial_capital) for p in sma_periods}
     bh = compute_buy_and_hold(data, initial_capital)
 
     print_comparison(results, bh)
 
-    print("\n" + "=" * 50)
-    print("SMA100 DILIGENCE CHECKS")
-    print("=" * 50)
-    sma100_report = run_diligence_checks(results["sma100"], data, "SMA100")
-
-    print("\n" + "=" * 50)
-    print("SMA200 DILIGENCE CHECKS")
-    print("=" * 50)
-    sma200_report = run_diligence_checks(results["sma200"], data, "SMA200")
+    reports = {}
+    for p in sma_periods:
+        print(f"\n" + "=" * 50)
+        print(f"SMA{p} DILIGENCE CHECKS")
+        print("=" * 50)
+        reports[p] = run_diligence_checks(results[f"sma{p}"], data, f"SMA{p}")
 
     print("\n" + "=" * 50)
     print("DILIGENCE SUMMARY")
     print("=" * 50)
-    print(f"SMA100: {sma100_report['passed']}/{sma100_report['total']} passed")
-    print(f"SMA200: {sma200_report['passed']}/{sma200_report['total']} passed")
+    for p in sma_periods:
+        print(f"SMA{p}: {reports[p]['passed']}/{reports[p]['total']} passed")
 
     print("\n--- Diligence Check Details ---")
     checks_order = ["vs Equal-Weight B&H", "Best Month Exclusion", "Trade Win Rate",
                     "Max Drawdown Analysis", "Monthly Consistency", "Trade Concentration",
                     "Sub-Period Consistency", "Sharpe Significance", "Permutation Test"]
     
-    print(f"\n{'Check':<30} {'SMA100':>10} {'SMA200':>10}")
-    print("-" * 52)
+    header = "".join([f"{'SMA'+str(p):>10}" for p in sma_periods])
+    print(f"\n{'Check':<30}{header}")
+    print("-" * (30 + 10 * len(sma_periods)))
     for check in checks_order:
-        s100 = "PASS" if sma100_report['checks'].get(check, {}).get('passed') else "FAIL"
-        s200 = "PASS" if sma200_report['checks'].get(check, {}).get('passed') else "FAIL"
-        print(f"{check:<30} {s100:>10} {s200:>10}")
+        row = "".join([f"{'PASS' if reports[p]['checks'].get(check, {}).get('passed') else 'FAIL':>10}" for p in sma_periods])
+        print(f"{check:<30}{row}")
 
-    return results, bh, sma100_report, sma200_report
+    return results, bh, reports
 
 
 if __name__ == "__main__":
