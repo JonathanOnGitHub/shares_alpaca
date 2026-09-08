@@ -246,3 +246,110 @@ All strategies rank 17-30th percentile vs random — their returns are not stati
 
 - `test_sma200.py` — Backtest script comparing SMA100, SMA200, SMA250, SMA300, and B&H
 - Uses existing `src/backtest/engine.py` and `src/validation/diligence.py`
+
+---
+
+## Survivorship Bias & Rolling Annual Basket Test
+
+After identifying `covered_calls_mega` as the top strategy (8/9 diligence, 2,170% return), we conducted a more rigorous test to understand **survivorship bias** in the original backtest.
+
+### Methodology: Rolling Annual Basket Selection
+
+The original `covered_calls_mega` test held the same basket of mega-cap stocks for 11 years. This creates survivorship bias — you're implicitly selecting stocks that *survived* and *thrived*. To test this properly:
+
+```
+Each year:
+1. Select top 30 (or bottom 30) stocks based on PRIOR year's returns
+2. Run covered calls on that basket for the current year
+3. Compare to equal-weight buy-and-hold on the same basket
+4. Rebalance annually based on prior-year performance
+```
+
+**Example:** On Jan 1, 2015, select the 30 stocks with the highest 2014 returns → hold those for 2015 with covered calls. On Jan 1, 2016, re-select based on 2015 returns, and so on.
+
+**Universe:** 78 stocks (extended mega-cap universe for diversity)
+
+### Results: Top 30 (Prior-Year Winners)
+
+| Year | B&H Return | CC Return | Alpha |
+|------|------------|-----------|-------|
+| 2015 | +12.8% | +8.8% | -4.0% |
+| 2016 | +15.5% | +22.1% | **+6.6%** |
+| 2017 | +22.6% | +14.0% | -8.7% |
+| 2018 | +2.7% | +6.3% | **+3.6%** |
+| 2019 | +35.7% | +18.0% | -17.6% |
+| 2020 | +57.2% | +32.1% | -25.1% |
+| 2021 | +35.3% | +18.6% | -16.7% |
+| 2022 | -8.2% | -4.6% | **+3.6%** |
+| 2023 | +4.5% | +1.7% | -2.8% |
+| 2024 | +37.4% | +21.4% | -16.0% |
+
+**10-Year Compound:** B&H 524%, CC 250%
+**Average Alpha:** -7.7% per year
+**Years CC beats B&H:** 3/10
+
+### Results: Bottom 30 (Prior-Year Losers)
+
+| Year | B&H Return | CC Return | Alpha |
+|------|------------|-----------|-------|
+| 2015 | +10.7% | +11.8% | **+1.2%** |
+| 2016 | +21.1% | +14.0% | -7.1% |
+| 2017 | +21.8% | +9.0% | -12.8% |
+| 2018 | +0.7% | +1.4% | **+0.7%** |
+| 2019 | +26.7% | +12.1% | -14.6% |
+| 2020 | +42.9% | +31.3% | -11.6% |
+| 2021 | +28.8% | +17.9% | -10.9% |
+| 2022 | -15.1% | -8.3% | **+6.8%** |
+| 2023 | +69.4% | +28.2% | -41.1% |
+| 2024 | +2.0% | -1.8% | -3.8% |
+
+**10-Year Compound:** B&H 462%, CC 182%
+**Average Alpha:** -9.3% per year
+**Years CC beats B&H:** 3/10
+
+### Comparison Summary
+
+| Metric | Top 30 (Winners) | Bottom 30 (Losers) |
+|--------|-------------------|---------------------|
+| B&H Compound (10yr) | 524% | 462% |
+| CC Compound (10yr) | 250% | 182% |
+| Average Alpha/year | -7.7% | -9.3% |
+| Years CC beats B&H | 3/10 | 3/10 |
+
+### Key Findings
+
+1. **Covered calls underperform on BOTH winner and loser baskets** — alpha is negative in both cases
+
+2. **Bottom 30 (prior losers) does WORSE with CC than Top 30 (prior winners):**
+   - Losers: -9.3% avg alpha vs Winners: -7.7% avg alpha
+   - Covered calls cap the mean-reversion bounce of prior losers
+
+3. **Only 3/10 years does CC beat B&H** — typically in flat/mixed years
+
+4. **The original "covered_calls_mega" result was inflated by ~10x:**
+   - Original backtest: 2,170% compound (11 years on same mega basket)
+   - Rolling annual rebalance: 250% compound (10 years, top-30 selection)
+   - The difference is survivorship + selection bias — holding NVDA/AMD through the biggest bull market in history isn't replicable
+
+5. **Covered calls are a drag in trending markets:**
+   - On winners: caps big gains (2020: +57% B&H → +32% CC, lost 25%)
+   - On losers: caps mean-reversion bounce (2023: +69% B&H → +28% CC, lost 41%)
+
+### When CC Actually Works
+
+The only year both Top 30 and Bottom 30 beat B&H was **2022** (bear market):
+- Top 30: +3.6% alpha
+- Bottom 30: +6.8% alpha
+
+**Covered calls work in sideways/declining markets** where premium collection exceeds the cost of capped upside. In trending bull markets, you're giving up far more than you collect.
+
+### Bottom Line
+
+The `covered_calls_mega` strategy's extraordinary backtest performance (2,170%) was primarily driven by:
+1. **Survivorship bias** — holding stocks that happened to be winners
+2. **Selection bias** — the specific mega-cap basket happened to include NVDA, AMD, AVGO at exactly the right time
+3. **Not rebalancing** — locking in gains rather than rotating to new winners
+
+The rolling annual basket test shows the **actual alpha of covered calls is negative** (-7.7% to -9.3% per year vs buy-and-hold) when you properly account for stock selection and annual rebalancing.
+
+**The strategy is fundamentally flawed for trending markets.** It only provides alpha in sideways or declining markets.
