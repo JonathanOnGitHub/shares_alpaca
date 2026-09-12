@@ -1,0 +1,16 @@
+# Raw insider transaction data (SEC EDGAR)
+ceo_purchases_raw.csv
+ceo_purchases_raw_5yr.csv
+ceo_purchases_raw_v2.csv
+
+# Generated signal histories (output, not source)
+signal_history.csv
+signal_history_*.csv
+
+# Backtest outputs
+backtest_results.csv
+backtest_results_wf.csv
+backtest_summary.txt
+
+# Individual config backtest results
+results_*.csv
