@@ -158,14 +158,76 @@ March rebalances catch **post-correction** opportunities:
 
 ---
 
-## Survivorship Bias Summary
+## October Basket vs S&P 500: How Many Stocks Beat the Index?
 
-| Strategy | Original | Debiased | Verdict |
-|----------|----------|----------|---------|
-| covered_calls_mega | 2,170% | ~250% | **DEBUNKED** (~9x inflation) |
-| lowvol_small_inverse | 952% | ~159% | **DEBUNKED** (~6x inflation) |
-| momentum_smallcap | 1,512% | ~952% | **VALID** (~1.6x inflation) |
-| HighVol 10 | N/A | ~3,000-5,000% | **VALID but concentration-biased** |
+### Year-by-Year Comparison
+
+| Year | SPY Return | # Beat SPY | Notable Winners |
+|------|-----------|------------|----------------|
+| 2015 | +7.6% | 5/10 | AMD(+243%), OLLI(+66%), AVGO(+41%) |
+| 2016 | +22.6% | 6/10 | AMD(+114%), NFLX(+103%), NOW(+63%) |
+| 2017 | +9.4% | **10/10** | ALL stocks beat SPY! |
+| 2018 | +10.0% | 8/10 | CVNA(+70%), ZS(+29%), BOOT(+31%) |
+| 2019 | +18.7% | 9/10 | CRWD(+168%), DDOG(+226%), NET(+276%) |
+| 2020 | +29.1% | 9/10 | OXY(+202%), MRNA(+339%), BOOT(+196%) |
+| 2021 | -18.6% | 3/10 | BIIB(-6%), OXY(+112%), VLO(+51%) |
+| 2022 | +20.7% | 3/10 | CVNA(+90%), NET(+23%), OKTA(+66%) |
+| 2023 | +34.8% | 6/10 | CVNA(+455%), ANF(+155%), CHWY(+65%) |
+| 2024 | +15.6% | 7/10 | CVNA(+80%), TSLA(+95%), INTC(+57%) |
+
+**Overall: 66/100 stocks (66%) beat SPY**
+
+### Distribution of Winners Per Year
+
+| Beat SPY | Frequency |
+|----------|----------|
+| At least 5/10 | 8/10 years |
+| At least 7/10 | 5/10 years |
+| At least 8/10 | 4/10 years |
+| All 10/10 | 1/10 years (2017) |
+
+### Best Repeat Offenders (Beat SPY Most Often)
+
+| Stock | Appearances | Beat SPY | Win Rate | Avg Return |
+|-------|-------------|----------|----------|------------|
+| **AMD** | 6x | 6x | **100%** | +112% |
+| **OKTA** | 5x | 4x | **80%** | +77% |
+| **NET** | 5x | 4x | **80%** | +81% |
+| **CVNA** | 8x | 6x | 75% | +127% |
+| **BOOT** | 5x | 3x | 60% | +84% |
+
+### Trapdoor Stocks (Beat SPY <50% of Time)
+
+| Stock | Appearances | Beat SPY | Win Rate | Avg Return |
+|-------|-------------|----------|----------|------------|
+| **SNOW** | 4x | 1x | 25% | -11% |
+| **ANF** | 9x | 3x | 33% | +21% |
+| **MRNA** | 5x | 2x | 40% | +125%* |
+| **TSLA** | 7x | 3x | 43% | +33% |
+
+*MRNA's 125% avg return is skewed by one huge year — inconsistent
+
+---
+
+## Stop-Loss Analysis
+
+### Stop-Loss Sensitivity (October HighVol Strategy)
+
+| Strategy | 9yr Compound | Avg Annual Return | Stocks Stopped/yr |
+|----------|-------------|-------------------|------------------------|
+| **No SL** | **+7,039%** | +63.9% | 0 |
+| Hard 50% | +5,423% | +59.3% | 1.4 |
+| Trail 50% | +5,007% | +56.5% | 2.3 |
+| Hard 30% | +4,238% | +54.3% | 3.0 |
+| Trail 30% | +1,987% | +41.6% | 5.1 |
+
+**Key finding: No stop-loss is best. Trailing stops are terrible for HighVol because volatile stocks constantly pull back 30% within trends.**
+
+### Why Trailing 30% Failed
+
+- HighVol stocks pull back 30%+ multiple times within a year
+- Trailing stops constantly trigger → stopped out before the rebound
+- Example 2019: Trail 30% stopped 7/10 stocks, returned only +68%
 
 ---
 
@@ -178,6 +240,8 @@ March rebalances catch **post-correction** opportunities:
 5. **HighVol concentration risk is real** — A few stocks (CVNA, MRNA, TSLA) dominate returns
 6. **BOOT and ANF appear in every basket for their "home" months** — certain stocks consistently have highest volatility at specific times of year
 7. **2019 was decisive for October** (+175pp advantage) — best-of-cycle stock selection in CRWD, MRNA, NET
+8. **66% of October basket stocks beat SPY** — AMD (100%), OKTA (80%), NET (80%) are most reliable
+9. **No stop-loss is best** — trailing stops are terrible for HighVol momentum strategies
 
 ---
 
