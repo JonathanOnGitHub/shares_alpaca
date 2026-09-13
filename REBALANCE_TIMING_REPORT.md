@@ -218,6 +218,7 @@ We tested whether the October HighVol strategy works across different market cap
 | **Mega-cap US** | 104 | SPY (S&P500) | **7,039%** | 8/10 years |
 | **Small-cap US** | ~80 | IWM (Russell 2000) | **2,216%** | 8/10 years |
 | **FTSE 100** | 73 | ISF.L (FTSE 100 ETF) | **233%** | 8/10 years |
+| **DAX 40** | 37 | EWG (MSCI Germany) | **307%** | 7/10 years |
 
 ### FTSE 100 Year-by-Year
 
@@ -234,11 +235,26 @@ We tested whether the October HighVol strategy works across different market cap
 | 2023 | +21.4% | +7.6% | ✓ |
 | 2024 | +18.1% | +14.8% | ✓ |
 
+### DAX 40 Year-by-Year
+
+| Year | DAX Basket | EWG | Beat? |
+|------|------------|-----|-------|
+| 2015 | +21.5% | +0.1% | ✓ |
+| 2016 | +39.8% | +30.2% | ✓ |
+| 2017 | -2.0% | -12.1% | ✓ |
+| 2018 | +19.5% | +0.1% | ✓ |
+| 2019 | +37.0% | +9.1% | ✓ |
+| 2020 | +37.0% | +17.4% | ✓ |
+| 2021 | -37.1% | -37.9% | ✓ |
+| 2022 | +13.3% | +28.0% | |
+| 2023 | +26.9% | +31.0% | |
+| 2024 | +20.4% | +27.8% | |
+
 ### Key Findings
 
-1. **HighVol works across all universes** — beats benchmark 8/10 years in each case
-2. **US outperforms UK** — mega-cap US (7,039%) >> FTSE 100 (233%)
-3. **UK blue-chips are more defensive** — lower absolute returns but still positive alpha
+1. **HighVol works across all universes** — beats benchmark 7-8/10 years in each case
+2. **US outperforms Europe** — mega-cap US (7,039%) >> DAX (307%) >> FTSE (233%)
+3. **German market also benefits** — DAX HighVol beat EWG 7/10 years (+307% vs +95%)
 4. **Small-cap US also works** — 2,216% vs 133% for Russell 2000 ETF
 
 ---
