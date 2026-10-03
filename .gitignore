@@ -10,3 +10,4 @@ tensorflow/
 *.so
 /tmp/
 *.egg-info/
+src/data/.edgar_cache/
