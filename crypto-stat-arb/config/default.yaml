@@ -1,0 +1,145 @@
+# Crypto Statistical-Arbitrage Research System - Configuration
+# Version 1.0
+
+# Trading pairs (base currencies)
+pairs:
+  - BTC
+  - XRP
+  - LINK
+  - SOL
+
+# All 6 pair combinations (A/B format)
+pair_combinations:
+  - BTC/XRP
+  - BTC/LINK
+  - BTC/SOL
+  - XRP/LINK
+  - XRP/SOL
+  - LINK/SOL
+
+# Timeframe intervals
+timeframes:
+  - 5m
+  - 15m
+  - 1h
+  - 4h
+  - 1d
+
+# Data lookback periods (in days) per timeframe
+lookback_days:
+  5m: 30
+  15m: 60
+  1h: 720
+  4h: 720
+  1d: 1825
+
+# Cost scenarios (all rates as decimals)
+cost_scenarios:
+  optimistic:
+    maker_fee: 0.0002      # 0.02%
+    taker_fee: 0.0002      # 0.02%
+    slippage_bps: 0.01     # 1 basis point
+    funding_rate_per_hour: 0.00001    # 0.001% per hour
+    short_rate_per_hour: 0.00005      # 0.005% per hour
+
+  base:
+    maker_fee: 0.0004       # 0.04%
+    taker_fee: 0.0004       # 0.04%
+    slippage_bps: 0.02      # 2 basis points
+    funding_rate_per_hour: 0.00003    # 0.003% per hour
+    short_rate_per_hour: 0.0001       # 0.01% per hour
+
+  pessimistic:
+    maker_fee: 0.0006       # 0.06%
+    taker_fee: 0.0006       # 0.06%
+    slippage_bps: 0.04      # 4 basis points
+    funding_rate_per_hour: 0.00006    # 0.006% per hour
+    short_rate_per_hour: 0.0002       # 0.02% per hour
+
+# Walk-forward parameters
+walk_forward:
+  train_days: 180
+  test_days: 30
+  roll_days: 30
+
+# Beta lookback strategies
+beta_lookbacks:
+  - static
+  - 30
+  - 60
+  - 90
+  - 180
+
+# Entry z-score thresholds
+entry_thresholds:
+  - 1.0
+  - 1.5
+  - 2.0
+  - 2.5
+  - 3.0
+
+# Exit types and thresholds
+exit_types:
+  - z0      # Exit at z = 0
+  - z025    # Exit at z = ±0.25
+  - z050    # Exit at z = ±0.5
+  - time    # Time-based exit
+  - stop    # Stop-loss exit
+
+exit_thresholds:
+  z0: 0.0
+  z025: 0.25
+  z050: 0.5
+  time: 12  # bars
+  stop: 3.0 # z-score stop loss
+
+# Risk limits
+risk_limits:
+  max_position_pct: 0.20        # Max 20% of capital in single leg
+  max_gross_exposure: 2.0        # Max 200% gross exposure
+  max_net_exposure: 0.50         # Max 50% net exposure
+  max_pair_exposure: 0.40        # Max 40% in single pair
+  max_portfolio_exposure: 1.5    # Max 150% portfolio exposure
+  stop_loss_z: 3.0              # Stop loss at ±3 z-score
+  max_holding_period_bars: 100  # Max 100 bars per trade
+
+# Statistical classification thresholds
+classification:
+  robust_sharpe_min: 1.0         # Sharpe > 1.0 for ROBUST classification
+  robust_pvalue_max: 0.10        # p-value < 0.10 for ROBUST classification
+  fragile_pvalue_min: 0.10       # p-value > 0.10 = FRAGILE
+  no_edge_pvalue_min: 0.20       # p-value > 0.20 = NO EDGE
+
+# Data source configuration
+data_source:
+  exchange: binance
+  quote_currency: USDT
+  timezone: UTC
+  api_base_url: https://api.binance.com
+  rate_limit_delay_ms: 500
+  max_retries: 3
+  timeout_seconds: 30
+
+# Logging configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Random seed for reproducibility
+random_seed: 42
+
+# Analysis parameters
+analysis:
+  zscore_lookback: 30           # bars for rolling z-score mean/std
+  correlation_windows:
+    - 30
+    - 60
+    - 90
+  cointegration_window: 120     # bars for rolling cointegration
+  halflife_min: 5               # minimum halflife in bars
+  halflife_max: 500             # maximum halflife in bars
+
+# Backtest defaults
+backtest:
+  initial_capital: 100000.0     # $100,000 default
+  position_sizing: volatility   # equal_dollar, ols, volatility, beta_neutral
