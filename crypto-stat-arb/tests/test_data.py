@@ -29,7 +29,7 @@ class TestValidator:
         df = pd.DataFrame({"open": [100], "high": [105]})
         result = validate_ohlcv(df)
 
-        assert result["has_required_columns"] is False
+        assert result["has_required_columns"] == False
 
     def test_validate_ohlcv_negative_prices(self, synthetic_ohlcv):
         """Test validation detects negative prices."""
@@ -37,7 +37,7 @@ class TestValidator:
         df.loc[0, "close"] = -100
         result = validate_ohlcv(df)
 
-        assert result["no_negative_prices"] is False
+        assert result["no_negative_prices"] == False
 
     def test_validate_ohlcv_null_values(self, synthetic_ohlcv):
         """Test validation detects null OHLC values."""
@@ -45,14 +45,14 @@ class TestValidator:
         df.loc[0, "close"] = np.nan
         result = validate_ohlcv(df)
 
-        assert result["no_null_ohlc"] is False
+        assert result["no_null_ohlc"] == False
 
     def test_validate_ohlcv_empty(self):
         """Test validation of empty DataFrame."""
         df = pd.DataFrame()
         result = validate_ohlcv(df)
 
-        assert result["has_required_columns"] is False
+        assert result["has_required_columns"] == False
 
     def test_check_data_integrity(self, tmp_path):
         """Test integrity check on temporary directory."""

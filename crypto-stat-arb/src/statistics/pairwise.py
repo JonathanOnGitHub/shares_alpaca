@@ -20,21 +20,27 @@ def compute_log_prices(
     Args:
         df_a: DataFrame with OHLCV data for asset A.
         df_b: DataFrame with OHLCV data for asset B.
-        price_col: Column name for price (default: 'close').
+        price_col: Column name for price (default: 'close'). Also accepts
+            'close_a'/'close_b' when df is a pre-processed pair DataFrame.
 
     Returns:
         DataFrame with aligned log_prices_A and log_prices_B columns.
     """
-    # Extract close prices
-    if isinstance(df_a, pd.DataFrame) and price_col in df_a.columns:
-        prices_a = df_a[price_col]
-    else:
-        prices_a = df_a
+    # Extract close prices — handle both raw OHLCV ('close') and
+    # pre-processed pair data ('close_a' / 'close_b')
+    def _price_from_df(df: pd.DataFrame, col: str) -> pd.Series:
+        """Extract price series from a DataFrame, trying multiple column names."""
+        if isinstance(df, pd.DataFrame):
+            if col in df.columns:
+                return df[col]
+            # Pre-processed pair DataFrame: use close_a / close_b
+            if "close_a" in df.columns and col == "close":
+                return df["close_a"]
+        # df is already a Series, or col not found — return as-is
+        return df  # type: ignore[return-value]
 
-    if isinstance(df_b, pd.DataFrame) and price_col in df_b.columns:
-        prices_b = df_b[price_col]
-    else:
-        prices_b = df_b
+    prices_a: pd.Series = _price_from_df(df_a, price_col)
+    prices_b: pd.Series = _price_from_df(df_b, price_col)
 
     # Align on index
     aligned = pd.DataFrame({

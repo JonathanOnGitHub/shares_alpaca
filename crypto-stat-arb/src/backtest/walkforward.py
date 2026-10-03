@@ -120,13 +120,24 @@ class WalkForwardValidator:
         pair_name = list(full_data.keys())[0]
         data = full_data[pair_name]
 
+        # Ensure DatetimeIndex — convert if needed, log and return empty on failure
         if not isinstance(data.index, pd.DatetimeIndex):
-            logger.error("Data must have DatetimeIndex for walk-forward validation")
-            return WalkForwardResult(
-                window_results=[],
-                aggregate_metrics={},
-                experiment_metadata={},
+            logger.warning(
+                f"Index type is {type(data.index).__name__}, "
+                "attempting conversion to DatetimeIndex"
             )
+            try:
+                data = data.copy()
+                data.index = pd.to_datetime(data.index, utc=True)
+            except Exception as ex:
+                logger.error(
+                    f"Failed to convert index to DatetimeIndex: {ex}"
+                )
+                return WalkForwardResult(
+                    window_results=[],
+                    aggregate_metrics={},
+                    experiment_metadata={},
+                )
 
         # Sort by index
         data = data.sort_index()

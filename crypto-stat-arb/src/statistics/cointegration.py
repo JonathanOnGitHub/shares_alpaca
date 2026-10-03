@@ -51,16 +51,29 @@ def engle_granger_test(
     residuals = model.resid
 
     # Step 2: ADF test on residuals
+    # Guard: if residuals are constant (flat), adfuller will raise ValueError
+    if np.std(residuals) < 1e-10:
+        logger.warning("Residuals are constant — spread did not deviate from hedge ratio; returning not_cointegrated")
+        return {
+            "test_statistic": np.nan,
+            "p_value": 1.0,
+            "critical_values": {},
+            "null_hypothesis": "No cointegration (residuals have unit root)",
+            "conclusion": "not_cointegrated",
+            "residuals": residuals,
+        }
+
     adf_result = adfuller(
         residuals,
         maxlag=12,
         regression="c",  # constant only
         autolag="AIC",
+        result_object=True,
     )
 
-    test_stat = adf_result[0]
-    p_value = adf_result[1]
-    critical_values = adf_result[4]
+    test_stat = adf_result.statistic
+    p_value = adf_result.pvalue
+    critical_values = adf_result.critical_values
 
     # Critical values from MacKinnon's table (approximate)
     macinnon_critical = {
@@ -122,13 +135,14 @@ def adf_test(series: pd.Series) -> dict[str, Any]:
         maxlag=12,
         regression="c",
         autolag="AIC",
+        result_object=True,
     )
 
-    test_stat = result[0]
-    p_value = result[1]
-    lags = result[2]
-    n_obs = result[3]
-    critical_values = result[4]
+    test_stat = result.statistic
+    p_value = result.pvalue
+    lags = result.lags
+    n_obs = result.nobs
+    critical_values = result.critical_values
 
     # Conclusion
     is_stationary = p_value < 0.05

@@ -192,6 +192,10 @@ class MarketDataDownloader:
         df = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
         df = df.sort_values("timestamp").reset_index(drop=True)
 
+        # Set timestamp as DatetimeIndex for downstream time-series operations
+        df = df.set_index("timestamp")
+        df.index = df.index.tz_convert(None)  # Drop UTC tz
+
         return df
 
     def download_pair(
@@ -256,8 +260,8 @@ class MarketDataDownloader:
             "quote_currency": "USDT",
             "timezone": "UTC",
             "interval": interval,
-            "data_start": str(df["timestamp"].min()),
-            "data_end": str(df["timestamp"].max()),
+            "data_start": str(df.index.min()),
+            "data_end": str(df.index.max()),
             "missing_obs": 0,  # Would need gap detection logic
             "api_limitations": "Free tier: 1200 requests/min, max 1000 candles per query",
             "n_candles": len(df),

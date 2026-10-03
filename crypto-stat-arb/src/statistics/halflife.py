@@ -12,11 +12,9 @@ logger = logging.getLogger(__name__)
 def estimate_halflife(spread_returns: pd.Series) -> float:
     """Estimate the half-life of mean reversion using Ornstein-Uhlenbeck formula.
 
-    The OU model: dX_t = lambda * (mu - X_t) * dt + dW_t
-    Where lambda < 0 for mean-reversion.
+    OU process: r_t = λ · r_{t-1} + const + ε_t  (mean-reverting when −1 < λ < 1)
 
-    The half-life is: -log(2) / log(1 - lambda)
-    Where lambda is the AR(1) coefficient of spread returns.
+    Half-life formula: HL = −log(2) / log(|λ|)
 
     Args:
         spread_returns: Series of spread returns (first difference of spread).
@@ -39,19 +37,24 @@ def estimate_halflife(spread_returns: pd.Series) -> float:
     x = returns_clean.values[:-1]
 
     # OLS: r_t = a + b * r_{t-1}
+    # Guard against zero variance (flat spread returns — spread didn't move)
+    if np.std(np.asarray(x), ddof=1) < 1e-10:
+        logger.warning("Spread returns have zero variance — spread is flat; returning NaN")
+        return np.nan
+
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
     lam = slope  # lambda coefficient
 
-    # Half-life formula: -log(2) / log(1 - lambda)
-    # lambda must be < 1 for stable half-life
-    if lam >= 1 or lam <= -1:
+    # Guard: lam must be strictly between 0 and 1 for a valid mean-reverting half-life.
+    # Use |lam| in the formula so it works for both +ve and -ve AR(1) coefficients.
+    if lam <= 0 or lam >= 1:
         logger.warning(
-            f"AR(1) coefficient {lam:.4f} out of stable range [-1, 1], "
-            "cannot estimate half-life"
+            f"AR(1) coefficient {lam:.4f} not in (0, 1) — "
+            "spread is not mean-reverting; returning NaN"
         )
         return np.nan
 
-    halflife = -np.log(2) / np.log(lam)
+    halflife = -np.log(2) / np.log(abs(lam))
 
     # Sanity check: halflife should be positive and reasonable
     if halflife < 0 or halflife > 10000:
