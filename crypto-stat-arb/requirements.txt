@@ -7,12 +7,12 @@ scikit-learn==1.5.1
 matplotlib==3.9.2
 
 # Testing & quality
-pytest==8.3.3
+pytest==9.0.3
 pytest-cov==5.0.0
 
 # Configuration & HTTP
 pyyaml==6.0.2
-requests==2.32.3
+requests==2.33.0
 
 # Jupyter
 jupyter==1.1.1
@@ -20,7 +20,7 @@ ipython==8.27.0
 jupyter-client==8.6.3
 jupyter-core==5.7.2
 nbformat==5.10.4
-nbconvert==7.16.4
+nbconvert==7.17.1
 
 # Binance connector (optional - for live data)
 python-binance==1.0.19
