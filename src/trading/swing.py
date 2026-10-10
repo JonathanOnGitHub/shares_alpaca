@@ -20,7 +20,7 @@ Exit:
 import numpy as np
 import pandas as pd
 
-from src.backtest.engine import Trade
+from src.backtest.engine import Trade, position_value
 
 
 class SwingTrading:
@@ -126,7 +126,10 @@ class SwingTrading:
                         continue
                     series_close = ind.loc[ind.index <= date, "close"]
                     if not series_close.empty:
-                        total_equity += pos["shares"] * series_close.iloc[-1]
+                        total_equity += position_value(
+                            pos["shares"], pos["entry_price"],
+                            series_close.iloc[-1], pos["direction"],
+                        )
                 equity_curve.append(total_equity)
                 equity_index.append(date)
                 continue
@@ -153,7 +156,8 @@ class SwingTrading:
                     sell_price = fill_price + slip
                 comm = pos["value"] * self.commission_pct
                 pnl = direction * shares * (sell_price - entry_price) - comm
-                capital += shares * sell_price - comm
+                # Cash returned = reserved cash +/- the trade's gain (correct for shorts too).
+                capital += position_value(shares, entry_price, sell_price, direction) - comm
                 trades.append(Trade(
                     date=date, symbol=sym, side="sell",
                     price=sell_price, shares=shares,
@@ -257,7 +261,10 @@ class SwingTrading:
                     continue
                 series_close = ind.loc[ind.index <= date, "close"]
                 if not series_close.empty:
-                    total_equity += pos["shares"] * series_close.iloc[-1]
+                    total_equity += position_value(
+                        pos["shares"], pos["entry_price"],
+                        series_close.iloc[-1], pos["direction"],
+                    )
             equity_curve.append(total_equity)
             equity_index.append(date)
 

@@ -17,6 +17,17 @@ class Trade:
     commission: float = 0.0
 
 
+def position_value(shares: float, entry_price: float, price: float, direction: int) -> float:
+    """Value of an open position, given the cash reserved when it was opened.
+
+    When a position is opened the backtests set aside ``shares * entry_price`` of cash.
+    A long is then worth ``shares * price``. A short is worth that reserved cash plus the gain
+    from the price falling: ``shares * (2 * entry_price - price)``. Both cases are
+    ``shares * (entry_price + direction * (price - entry_price))``.
+    """
+    return shares * (entry_price + direction * (price - entry_price))
+
+
 @dataclass
 class BacktestResult:
     total_return: float
