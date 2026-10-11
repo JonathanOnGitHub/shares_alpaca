@@ -25,6 +25,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from src.backtest.engine import weights_frame
+
 
 # S&P 500 proxy universe — widely traded, consistently liquid large-caps.
 # NOTE: this is a present-day list, so any backtest on it has survivorship bias
@@ -112,6 +114,7 @@ class HighVolStrategy:
         portfolio_rets = []
         dates_run = []
         trades = []
+        weight_rows: dict = {}
 
         for i in range(len(signals) - 1):
             entry_date = signals.index[i]
@@ -126,6 +129,7 @@ class HighVolStrategy:
                 ret = (active * row[active.index]).sum()
                 portfolio_rets.append(ret)
                 dates_run.append(date)
+                weight_rows[date] = active
 
             # Build trade log (one buy/sell pair per rebalance)
             for sym in active.index:
@@ -166,6 +170,10 @@ class HighVolStrategy:
         wins = sum(1 for t in sell_trades if t.get("pnl", 0) > 0)
         win_rate = wins / max(len(sell_trades), 1)
 
+        # Weights held in each month and the monthly returns they earned (for the skill tests).
+        # Both are monthly, like ``equity_curve``.
+        weights_df = weights_frame(weight_rows, monthly_rets.columns)
+
         return {
             "total_return": total_ret,
             "annual_return": ann_ret,
@@ -176,4 +184,6 @@ class HighVolStrategy:
             "equity_curve": cumulative,
             "trade_log": trades,
             "signals": signals,
+            "weights": weights_df,
+            "asset_returns": monthly_rets.loc[weights_df.index],
         }

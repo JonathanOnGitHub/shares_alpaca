@@ -137,4 +137,8 @@ class MATiming:
             "benchmark_equity": bh_equity,
             "trade_log": trades,
             "prices": {s: data[s] for s in data},
+            # Exposure actually applied each day (the signal is lagged twice above) and the daily
+            # returns it earned, for the skill tests. Cash interest and costs are not included.
+            "weights": position.shift(1).fillna(0.0),
+            "asset_returns": daily_returns,
         }

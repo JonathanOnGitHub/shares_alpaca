@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from src.backtest.engine import Trade
+from src.backtest.engine import Trade, weights_frame
 
 
 class QualityFilter:
@@ -152,6 +152,7 @@ class LowVol:
         dates_run = []
         trades: list[Trade] = []
         capital = self.initial_capital
+        weight_rows: dict = {}
 
         for i in range(len(signals) - 1):
             entry_date = signals.index[i]
@@ -166,6 +167,7 @@ class LowVol:
                 ret = (active * row[active.index]).sum()
                 portfolio_rets.append(ret)
                 dates_run.append(date)
+                weight_rows[date] = active
 
             for sym in active.index:
                 entry_price = prices[sym].asof(entry_date)
@@ -205,6 +207,9 @@ class LowVol:
         wins = sum(1 for t in sell_trades if t.pnl and t.pnl > 0)
         win_rate = wins / max(len(sell_trades), 1)
 
+        # Weights held on each day and the daily returns they earned (for the skill tests).
+        weights_df = weights_frame(weight_rows, prices.columns)
+
         return {
             "total_return": total_ret,
             "annual_return": ann_ret,
@@ -215,4 +220,6 @@ class LowVol:
             "equity_curve": cumulative,
             "trade_log": trades,
             "prices": {s: data[s] for s in data},
+            "weights": weights_df,
+            "asset_returns": daily_returns.loc[weights_df.index],
         }

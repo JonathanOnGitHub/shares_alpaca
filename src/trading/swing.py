@@ -20,7 +20,7 @@ Exit:
 import numpy as np
 import pandas as pd
 
-from src.backtest.engine import Trade, position_value
+from src.backtest.engine import Trade, event_weights, position_value, weights_frame
 
 
 class SwingTrading:
@@ -116,6 +116,7 @@ class SwingTrading:
         trades: list[Trade] = []
         equity_curve: list[float] = [capital]
         equity_index: list = [all_dates[0] - pd.Timedelta(days=1)]
+        weight_rows: dict = {}
 
         for i, date in enumerate(all_dates):
             if i == 0:
@@ -203,6 +204,9 @@ class SwingTrading:
                 ))
             pending_entries.clear()
 
+            # Exposure held during `date` (after today's exits and entries), for the skill tests.
+            weight_rows[date] = event_weights(positions, indicators, prev_date, equity_curve[-1])
+
             # === Detect new exit conditions using prev_date's close ===
             for sym, pos in list(positions.items()):
                 ind = indicators.get(sym)
@@ -281,6 +285,13 @@ class SwingTrading:
         wins = sum(1 for t in sell_trades if t.pnl > 0)
         win_rate = wins / max(len(sell_trades), 1)
 
+        # Per-date exposure (fraction of equity, signed) and the close-to-close returns it earns, so
+        # selection/timing skill can be tested. See src/validation/skill_tests.py.
+        weights = weights_frame(weight_rows, list(indicators), index=all_dates[1:])
+        asset_returns = pd.DataFrame(
+            {sym: ind["close"].pct_change() for sym, ind in indicators.items()}
+        ).reindex(weights.index)
+
         return {
             "total_return": total_ret,
             "annual_return": ann_ret,
@@ -290,4 +301,6 @@ class SwingTrading:
             "num_trades": len(sell_trades),
             "equity_curve": equity,
             "trade_log": trades,
+            "weights": weights,
+            "asset_returns": asset_returns,
         }

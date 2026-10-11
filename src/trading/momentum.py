@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.backtest.engine import Trade
+from src.backtest.engine import Trade, weights_frame
 
 
 class CrossSectionalMomentum:
@@ -50,6 +50,7 @@ class CrossSectionalMomentum:
         dates_run = []
         trades: list[Trade] = []
         capital = 100_000.0
+        weight_rows: dict = {}
 
         for i in range(len(signals) - 1):
             entry_date = signals.index[i]
@@ -63,6 +64,7 @@ class CrossSectionalMomentum:
                 ret = (weights[active_symbols] * row[active_symbols]).sum()
                 portfolio_returns.append(ret)
                 dates_run.append(date)
+                weight_rows[date] = weights[active_symbols]
 
             # Build one round-trip Trade per active symbol per rebalance
             # period so the diligence suite can assess win rate and
@@ -99,6 +101,9 @@ class CrossSectionalMomentum:
         dd = cumulative / cumulative.cummax() - 1
         max_dd = float(dd.min())
 
+        # Weights held on each day and the daily returns they earned (for the skill tests).
+        weights_df = weights_frame(weight_rows, prices.columns)
+
         return {
             "total_return": total_ret,
             "annual_return": ann_ret,
@@ -107,4 +112,6 @@ class CrossSectionalMomentum:
             "num_trades": len(signals) * (self.top_n + self.bottom_n),
             "equity_curve": cumulative,
             "trade_log": trades,
+            "weights": weights_df,
+            "asset_returns": daily_returns.loc[weights_df.index],
         }
