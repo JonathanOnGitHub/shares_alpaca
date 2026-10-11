@@ -19,7 +19,7 @@ Exit:           RSI mean-reverts below neutral (45), or profit target hit,
 import numpy as np
 import pandas as pd
 
-from src.backtest.engine import Trade
+from src.backtest.engine import Trade, position_value
 
 
 class MeanReversion:
@@ -115,7 +115,10 @@ class MeanReversion:
                         continue
                     series_close = ind.loc[ind.index <= date, "close"]
                     if not series_close.empty:
-                        total_equity += pos["shares"] * series_close.iloc[-1]
+                        total_equity += position_value(
+                            pos["shares"], pos["entry_price"],
+                            series_close.iloc[-1], pos["direction"],
+                        )
                 equity_curve.append(total_equity)
                 equity_index.append(date)
                 continue
@@ -141,7 +144,8 @@ class MeanReversion:
                     sell_price = fill_price + slip
                 comm = pos["value"] * self.commission_pct
                 pnl = direction * shares * (sell_price - entry_price) - comm
-                capital += shares * sell_price - comm
+                # Cash returned = reserved cash +/- the trade's gain (correct for shorts too).
+                capital += position_value(shares, entry_price, sell_price, direction) - comm
                 trades.append(Trade(
                     date=date, symbol=sym, side="sell",
                     price=sell_price, shares=shares,
@@ -242,7 +246,10 @@ class MeanReversion:
                     continue
                 series_close = ind.loc[ind.index <= date, "close"]
                 if not series_close.empty:
-                    total_equity += pos["shares"] * series_close.iloc[-1]
+                    total_equity += position_value(
+                        pos["shares"], pos["entry_price"],
+                        series_close.iloc[-1], pos["direction"],
+                    )
             equity_curve.append(total_equity)
             equity_index.append(date)
 

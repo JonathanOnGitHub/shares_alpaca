@@ -114,9 +114,13 @@ class DiligenceSuite:
         for s, df in self.prices.items():
             idx = _normalize_idx(df.index)
             pf_dict[s] = pd.Series(df["close"].values, index=idx)
-        pf = pd.DataFrame(pf_dict)
-        ew = pf.mean(axis=1)
-        ew_rets = ew.pct_change().dropna()
+        pf = pd.DataFrame(pf_dict).sort_index()
+        # Equal-weight, daily-rebalanced benchmark: average the symbols' *returns*. (Averaging
+        # price levels would weight each stock by its share price, and would jump whenever a
+        # symbol enters the data.) Short gaps are forward-filled; symbols that haven't listed
+        # yet are simply left out of the average.
+        sym_rets = pf.ffill(limit=5).pct_change(fill_method=None)
+        ew_rets = sym_rets.mean(axis=1, skipna=True).dropna()
 
         strat_rets = self._daily_returns
         common = strat_rets.index.intersection(ew_rets.index)
@@ -298,71 +302,58 @@ class DiligenceSuite:
              "Second Half Return": f"{second*100:.2f}%"},
         )
 
-    def _check_permutation(self, n_permutations: int = 500, seed: int = 42) -> DiligenceCheck:
+    def _check_permutation(
+        self, n_permutations: int = 2000, seed: int = 42, block_len: int = 5
+    ) -> DiligenceCheck:
         """
-        Shuffle which symbols get which trade weight at each rebalance date
-        (preserving the long/short structure and turnover), rebuild the
-        equity curve under each shuffle, and see where the real strategy's
-        total return ranks against the random distribution. A signal with
-        no real information should look indistinguishable from a random
-        assignment of the same weights to the same universe.
+        Randomisation (sign-flip) test of the strategy's own daily returns.
+
+        Null hypothesis: the strategy has no edge, i.e. its daily returns are symmetric around
+        zero. Under that null, flipping the sign of a block of consecutive returns is as likely as
+        keeping it. We flip the signs of whole blocks at random (blocks keep short-run
+        autocorrelation and volatility clustering intact), recompute the mean daily return each
+        time, and report how often the randomised mean is at least as large as the real one.
+
+        The statistic is the *arithmetic* mean return. (Compounded return would be biased: random
+        sign flips of a volatile series always produce a negative compounded drift, which would
+        make almost any strategy look significant.)
+
+        The old version compared the strategy's compounded return with random sequences drawn from
+        the pooled daily returns of every symbol in ``prices``. That asks whether a diversified
+        portfolio beats a random single stock, so low-volatility strategies passed and
+        high-volatility ones failed whatever their skill, and the verdict changed with the universe.
+
+        What this does NOT test is whether the strategy beats random *selection* from its universe:
+        that needs the strategy's per-date weights, which the suite doesn't receive. The "vs
+        Equal-Weight B&H" check covers the benchmark comparison.
         """
-        n = len(self.prices)
-        if n < 2 or len(self.equity_curve) < 20:
-            return DiligenceCheck("Permutation Test", False, "Insufficient data for permutation test")
+        rets = self._daily_returns.dropna().to_numpy(dtype=float)
+        n = len(rets)
+        if n < 60:
+            return DiligenceCheck("Permutation Test", False, f"Only {n} daily returns")
 
-        symbols = list(self.prices.keys())
-
-        def _normalize_idx(idx):
-            if hasattr(idx, "tz") and idx.tz is not None:
-                idx = idx.tz_convert(None)
-            return pd.DatetimeIndex([pd.Timestamp(d.date()) for d in idx])
-
-        pf_dict = {}
-        for s in symbols:
-            df = self.prices[s]
-            idx = _normalize_idx(df.index)
-            pf_dict[s] = pd.Series(df["close"].values, index=idx)
-        price_df = pd.DataFrame(pf_dict).dropna(how="all")
-        daily_returns = price_df.pct_change()
-
-        # Recover the strategy's actual weight per symbol per day is not
-        # always available, so fall back to a return-based shuffle: shuffle
-        # the mapping between the strategy's realized daily return sequence
-        # and calendar dates is invalid (breaks autocorrelation), so instead
-        # we shuffle which symbols are selected at each rebalance by randomly
-        # relabeling the return columns before applying the same equal-weight
-        # long selection process implied by the observed win/loss pattern.
+        observed = float(rets.mean())
         rng = np.random.default_rng(seed)
-        strat_rets = self._daily_returns
-        common_idx = strat_rets.index.intersection(daily_returns.index)
-        if len(common_idx) < 20:
-            return DiligenceCheck("Permutation Test", False, "Too few overlapping days for permutation test")
+        n_blocks = int(np.ceil(n / block_len))
+        signs = rng.choice([-1.0, 1.0], size=(n_permutations, n_blocks))
+        signs = np.repeat(signs, block_len, axis=1)[:, :n]
+        null_means = (signs * rets).mean(axis=1)
 
-        pool = daily_returns.loc[common_idx].values.flatten()
-        pool = pool[~np.isnan(pool)]
-        if len(pool) < 50:
-            return DiligenceCheck("Permutation Test", False, "Insufficient return pool for permutation test")
+        # +1 on both sides so the p-value is never exactly zero.
+        p_value = (1 + int((null_means >= observed).sum())) / (1 + n_permutations)
+        percentile = (1 - p_value) * 100
+        passed = p_value < 0.05
 
-        real_total_return = (1 + strat_rets.loc[common_idx]).prod() - 1
-
-        random_totals = np.empty(n_permutations)
-        n_days = len(common_idx)
-        for i in range(n_permutations):
-            sim_rets = rng.choice(pool, size=n_days, replace=True)
-            random_totals[i] = np.prod(1 + sim_rets) - 1
-
-        percentile = float((random_totals < real_total_return).mean() * 100)
-        passed = percentile >= 95  # strategy beats 95%+ of random-return sequences
-
+        total_return = float((1 + self._daily_returns).prod() - 1)
         return DiligenceCheck(
             "Permutation Test",
             passed,
-            f"Strategy return ({real_total_return*100:.1f}%) beats {percentile:.0f}% of "
-            f"{n_permutations} random return sequences drawn from the same universe",
-            {"Strategy Return": f"{real_total_return*100:.2f}%",
-             "Random Median": f"{np.median(random_totals)*100:.2f}%",
-             "Percentile Rank": f"{percentile:.1f}%"},
+            f"Mean daily return {observed*1e4:.1f} bps beats {percentile:.0f}% of "
+            f"{n_permutations} block sign-flipped sequences (p={p_value:.3f})",
+            {"Strategy Return": f"{total_return*100:.2f}%",
+             "Mean Daily Return (bps)": f"{observed*1e4:.2f}",
+             "Percentile Rank": f"{percentile:.1f}%",
+             "p-value": f"{p_value:.4f}"},
         )
 
     def _check_sharpe_significance(self) -> DiligenceCheck:
@@ -372,14 +363,17 @@ class DiligenceSuite:
         sharpe = self._monthly_returns.mean() / self._monthly_returns.std() * np.sqrt(12) if self._monthly_returns.std() > 0 else 0
         n_months = len(self._monthly_returns)
 
-        # Simple significance: Sharpe > 2/sqrt(N) is ~ statistically significant
-        threshold = 2 / np.sqrt(n_months)
+        # A t-statistic above ~2 on the mean monthly return means monthly Sharpe > 2/sqrt(n_months).
+        # Multiplying by sqrt(12) to annualise gives annual Sharpe > 2/sqrt(n_months / 12) = 2/sqrt(years).
+        # (Comparing the annualised Sharpe with 2/sqrt(n_months) mixes units and is ~3.5x too lenient.)
+        n_years = n_months / 12
+        threshold = 2 / np.sqrt(n_years)
         passed = sharpe > threshold
 
         return DiligenceCheck(
             "Sharpe Significance",
             passed,
-            f"Sharpe {sharpe:.2f} vs threshold {threshold:.2f} for N={n_months} months",
+            f"Sharpe {sharpe:.2f} vs threshold {threshold:.2f} for N={n_months} months ({n_years:.1f} years)",
             {"Annual Sharpe": f"{sharpe:.2f}",
              "Significance Threshold": f"{threshold:.2f}"},
         )

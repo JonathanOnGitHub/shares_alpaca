@@ -165,15 +165,22 @@ print(report.summary())
 
 | # | Check | What it tests | Pass Condition |
 |---|---|---|---|
-| 1 | vs Equal-Weight B&H | Beats holding all assets equally | Strategy return > EW return |
+| 1 | vs Equal-Weight B&H | Beats holding all assets equally (daily-rebalanced, built from returns) | Strategy return > EW return |
 | 2 | Best Month Exclusion | Survives removing the single best month | Return stays positive |
 | 3 | Win Rate | Wins more than it loses (trade or monthly) | Win rate > 50% |
 | 4 | Max Drawdown Duration | Drawdown severity and recovery | DD > -50%, recovery < 2yr |
 | 5 | Monthly Consistency | Fraction of rolling 6-month windows positive | > 50% positive + Sharpe > 0 |
 | 6 | Trade Concentration | Any single trade dominates PnL | Largest trade < 50% of total |
 | 7 | Sub-Period Consistency | First half vs second half of test period | Both halves positive or 2nd not terrible |
-| 8 | Sharpe Significance | Sharpe ratio vs noise threshold | Sharpe > 2/√(N) |
-| 9 | Permutation Test | Strategy return vs 500 random return shuffles | Beats ≥ 95% of random trials |
+| 8 | Sharpe Significance | Annualised Sharpe vs noise threshold | Sharpe > 2/√(years) |
+| 9 | Permutation Test | Block sign-flip randomisation test of the strategy's mean daily return (null: no edge) | p < 0.05 |
+
+> **Re-run needed.** The scores in the table below were produced before the fixes to checks 1, 8 and 9
+> (benchmark built from price levels, Sharpe threshold in the wrong units, permutation test drawn
+> from pooled single-stock returns) and before the short-trade accounting fix in `mean_reversion.py`
+> and `swing.py`. Treat them as out of date until the suite is re-run. The new permutation test checks
+> for any edge versus zero; it does not test selection skill against the universe, which would need
+> per-date weights.
 
 ### Strategy Scores
 
