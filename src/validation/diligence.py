@@ -5,11 +5,17 @@ Usage:
     suite = DiligenceSuite(equity_curve, trades, prices)
     report = suite.run_all()
     print(report.summary())
+
+Pass ``weights`` and ``asset_returns`` (the per-date exposure the strategy held and the returns of every
+symbol it could have held; see ``src/validation/skill_tests.py``) to make the permutation check test
+selection or timing skill. Without them it only tests whether the mean return is distinguishable from zero.
 """
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+
+from src.validation.skill_tests import MIN_UNIVERSE_FOR_SELECTION, selection_test, timing_test
 
 
 @dataclass
@@ -67,6 +73,8 @@ class DiligenceSuite:
         prices: dict[str, pd.DataFrame],
         config: Optional[dict] = None,
         strategy_name: str = "Strategy",
+        weights: Optional[pd.DataFrame] = None,
+        asset_returns: Optional[pd.DataFrame] = None,
     ):
         def _normalize_idx(idx):
             if hasattr(idx, "tz") and idx.tz is not None:
@@ -75,6 +83,17 @@ class DiligenceSuite:
 
         eq_idx = _normalize_idx(equity_curve.index)
         self.equity_curve = pd.Series(equity_curve.values, index=eq_idx)
+
+        if (weights is None) != (asset_returns is None):
+            raise ValueError("weights and asset_returns must be given together")
+
+        def _normalize_frame(df: pd.DataFrame) -> pd.DataFrame:
+            out = df.copy()
+            out.index = _normalize_idx(out.index)
+            return out[~out.index.duplicated(keep="last")].sort_index()
+
+        self.weights = _normalize_frame(weights) if weights is not None else None
+        self.asset_returns = _normalize_frame(asset_returns) if asset_returns is not None else None
 
         self.trades = trades
         self.prices = prices
@@ -305,8 +324,58 @@ class DiligenceSuite:
     def _check_permutation(
         self, n_permutations: int = 2000, seed: int = 42, block_len: int = 5
     ) -> DiligenceCheck:
+        """Selection/timing skill test when weights were supplied, otherwise a test against zero edge."""
+        if self.weights is not None and self.asset_returns is not None:
+            return self._check_skill_permutation(n_permutations, seed)
+        return self._check_edge_vs_zero(n_permutations, seed, block_len)
+
+    def _check_skill_permutation(self, n_permutations: int, seed: int) -> DiligenceCheck:
+        """
+        Did the strategy pick better symbols (or hold at better times) than chance?
+
+        With enough symbols to choose among (``MIN_UNIVERSE_FOR_SELECTION``) this is the selection
+        test: every position keeps its dates, size and side but swaps its symbol for a random one,
+        so market-wide timing earns no credit. With fewer symbols (e.g. a single-asset timing
+        rule) it is the timing test: the whole weights matrix is shifted in time against the returns.
+        Pass requires p < 0.05 on that test. See ``src/validation/skill_tests.py`` for the nulls and
+        their limits. The statistic is the mean gross return of the weights, so costs and cash
+        interest do not enter; it is not the strategy's net return.
+        """
+        name = "Permutation Test"
+        n_universe = int(self.asset_returns.notna().any().sum())
+        try:
+            if n_universe >= MIN_UNIVERSE_FOR_SELECTION:
+                result = selection_test(self.weights, self.asset_returns, n_permutations, seed)
+                label = f"selection (random symbols, same timing and sizes; {result.n_episodes} positions among {result.n_candidates} symbols)"
+            else:
+                result = timing_test(self.weights, self.asset_returns, min(n_permutations, 1000), seed)
+                label = f"timing (weights shifted in time; {n_universe} symbols)"
+        except ValueError as exc:
+            return DiligenceCheck(name, False, f"Skill test not possible: {exc}")
+
+        passed = result.p_value < 0.05
+        bps = 1e4
+        return DiligenceCheck(
+            name,
+            passed,
+            f"{result.name.capitalize()} test: mean gross return {result.observed*bps:.1f} bps/period vs "
+            f"{result.null_mean*bps:.1f} +/- {result.null_std*bps:.1f} for random "
+            f"{'picks' if result.name == 'selection' else 'timing'} (p={result.p_value:.3f})",
+            {"Test": label,
+             "Observed (bps/period)": f"{result.observed*bps:.2f}",
+             "Null mean (bps/period)": f"{result.null_mean*bps:.2f}",
+             "Percentile Rank": f"{result.percentile:.1f}%",
+             "p-value": f"{result.p_value:.4f}"},
+        )
+
+    def _check_edge_vs_zero(
+        self, n_permutations: int = 2000, seed: int = 42, block_len: int = 5
+    ) -> DiligenceCheck:
         """
         Randomisation (sign-flip) test of the strategy's own daily returns.
+
+        Used when no weights were supplied. It cannot tell skill from simply being exposed to a
+        rising market.
 
         Null hypothesis: the strategy has no edge, i.e. its daily returns are symmetric around
         zero. Under that null, flipping the sign of a block of consecutive returns is as likely as
