@@ -173,14 +173,28 @@ print(report.summary())
 | 6 | Trade Concentration | Any single trade dominates PnL | Largest trade < 50% of total |
 | 7 | Sub-Period Consistency | First half vs second half of test period | Both halves positive or 2nd not terrible |
 | 8 | Sharpe Significance | Annualised Sharpe vs noise threshold | Sharpe > 2/√(years) |
-| 9 | Permutation Test | Block sign-flip randomisation test of the strategy's mean daily return (null: no edge) | p < 0.05 |
+| 9 | Permutation Test | Selection or timing skill when the backtest supplies per-date weights (see below); otherwise a block sign-flip test of the mean daily return against zero | p < 0.05 |
 
 > **Re-run needed.** The scores in the table below were produced before the fixes to checks 1, 8 and 9
 > (benchmark built from price levels, Sharpe threshold in the wrong units, permutation test drawn
 > from pooled single-stock returns) and before the short-trade accounting fix in `mean_reversion.py`
-> and `swing.py`. Treat them as out of date until the suite is re-run. The new permutation test checks
-> for any edge versus zero; it does not test selection skill against the universe, which would need
-> per-date weights.
+> and `swing.py`. Treat them as out of date until the suite is re-run.
+
+**Permutation test: what it checks.** Pass `weights` and `asset_returns` to `DiligenceSuite` (the per-date
+exposure the strategy held, and the returns of every symbol it could have held) and check 9 tests skill:
+
+- **Selection** (5 or more symbols): every position keeps its dates, size and side but swaps its symbol for a
+  random one. Being long a rising market earns no credit, because a random symbol is exposed at the same times.
+- **Timing** (fewer symbols, e.g. SPY 200-day MA): the whole weights matrix is shifted in time against the
+  returns. Constant exposure (buy-and-hold) cannot pass.
+
+The statistic is the mean *gross* return of the weights, so costs and cash interest are not part of it.
+Details and limits are in `src/validation/skill_tests.py`. The runner passes weights for `momentum`, `swing`,
+`ma_timing`, `low_vol` and `mean_reversion`; `HighVolStrategy` returns them too but has no runner entry.
+Strategies that don't return them (`jt_momentum`, `trend`, `cross_asset_momentum`, `valuation_timing`, the ML
+ensemble, covered calls, merger arb) still get the weaker test against zero edge, which cannot tell skill from
+exposure to a rising market, so a pass there says little. Neither version corrects for how many strategies or
+parameter sets were tried.
 
 ### Strategy Scores
 
