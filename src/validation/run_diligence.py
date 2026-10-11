@@ -33,6 +33,17 @@ from src.validation.diligence import DiligenceSuite
 ROOT = Path(__file__).resolve().parent.parent.parent
 REPORTS_DIR = ROOT / "reports"
 
+
+def _skill_kwargs(result: dict) -> dict:
+    """Weights and asset returns for DiligenceSuite, when the backtest exposes them.
+
+    Strategies that return both ``weights`` and ``asset_returns`` get the selection/timing skill
+    version of the permutation test; the rest fall back to the test against zero edge.
+    """
+    if result.get("weights") is not None and result.get("asset_returns") is not None:
+        return {"weights": result["weights"], "asset_returns": result["asset_returns"]}
+    return {}
+
 # Registry of strategy configs to validate. Add entries here as new
 # strategies/parameter sets are proposed, so every candidate goes through
 # the same gate before being considered for paper or live trading.
@@ -418,6 +429,7 @@ def run(strategy_name: str) -> dict:
             prices=data,
             config=spec["params"],
             strategy_name=strategy_name,
+            **_skill_kwargs(result),
         )
 
     elif spec["type"] == "ensemble":
@@ -533,6 +545,7 @@ def run(strategy_name: str) -> dict:
             prices=data,
             config=spec["params"],
             strategy_name=strategy_name,
+            **_skill_kwargs(result),
         )
 
     elif spec["type"] == "ma_timing":
@@ -565,6 +578,7 @@ def run(strategy_name: str) -> dict:
             prices=prices_for_suite,
             config=spec["params"],
             strategy_name=strategy_name,
+            **_skill_kwargs(result),
         )
 
     elif spec["type"] == "low_vol":
@@ -598,6 +612,7 @@ def run(strategy_name: str) -> dict:
             prices=result.get("prices", data),
             config=spec["params"],
             strategy_name=strategy_name,
+            **_skill_kwargs(result),
         )
 
     elif spec["type"] == "cross_asset_momentum":
@@ -651,6 +666,7 @@ def run(strategy_name: str) -> dict:
             prices=data,
             config=spec["params"],
             strategy_name=strategy_name,
+            **_skill_kwargs(result),
         )
 
     elif spec["type"] == "valuation_timing":

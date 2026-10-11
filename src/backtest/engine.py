@@ -28,6 +28,42 @@ def position_value(shares: float, entry_price: float, price: float, direction: i
     return shares * (entry_price + direction * (price - entry_price))
 
 
+def event_weights(positions: dict, indicators: dict, prev_date, equity: float) -> dict[str, float]:
+    """Signed exposure of each open position as a fraction of ``equity``, for the day after ``prev_date``.
+
+    Used by the event-driven backtests (mean reversion, swing). A position is valued at the latest
+    close on or before ``prev_date`` (its entry price if there is none), and ``equity`` should be the
+    account equity at that close, so ``sum(weight * close-to-close return)`` is the day's gross return.
+    Orders fill at the open, so on a day with an overnight gap this is an approximation; it is exact
+    when the open equals the previous close and there are no costs.
+    """
+    out = {}
+    for sym, pos in positions.items():
+        ref = pos["entry_price"]
+        ind = indicators.get(sym)
+        if ind is not None:
+            closes = ind.loc[:prev_date, "close"]
+            if len(closes):
+                ref = float(closes.iloc[-1])
+        out[sym] = pos["direction"] * pos["shares"] * ref / equity
+    return out
+
+
+def weights_frame(rows: dict, columns, index=None) -> pd.DataFrame:
+    """Build a date x symbol frame of weights from ``{date: {symbol: weight}}`` (or Series values).
+
+    Dates with no positions, and symbols never held, are zero. Pass ``index`` to force the dates
+    (e.g. every trading day, so flat days appear as all-zero rows).
+    """
+    if rows:
+        W = pd.DataFrame.from_dict({d: dict(w) for d, w in rows.items()}, orient="index")
+    else:
+        W = pd.DataFrame(index=pd.DatetimeIndex([]))
+    if index is not None:
+        W = W.reindex(pd.DatetimeIndex(index))
+    return W.reindex(columns=list(columns)).fillna(0.0).sort_index().astype(float)
+
+
 @dataclass
 class BacktestResult:
     total_return: float
