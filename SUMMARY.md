@@ -697,6 +697,59 @@ Select the 10 lowest-volatility stocks based on prior year (252-day rolling vol)
 **Market parity baseline:** Benchmark (522%) ≈ Random 15 (508%)
 Any strategy claiming >600%+ needs to demonstrate it's not just survivorship bias.
 
+## Experiment 12: Technical Pattern Backtests (5m and daily)
+
+Full write-up and runnable scripts: [`technical-backtests/`](technical-backtests/README.md).
+
+A systematic hunt for an edge in classical technical entry rules at three
+resolutions, long and short. **No rule produced an edge that survives costs.**
+
+| Study | Resolution | Signals | Verdict |
+|---|---|---|---|
+| Reclaim vs limit entry | 5m | 1,659 | Reclaim is **insurance, not alpha** |
+| Candlestick patterns | 5m | 5,450 | All six rules −0.09% to −0.41% |
+| Exit schemes | 5m | 8,760 | Every exit within 2bp of every other |
+| Candlestick patterns | daily | 41,650 | Raw means positive, **excess ≈ 0** |
+| Fading the breakout | daily | 17,054 | Edge real (+0.11%, t=3.57), **costs 3–5× it** |
+
+### Candlestick patterns, 5m (5,450 trades)
+
+Engulfing 44.3% win / −0.22%; hammer 44.3% / −0.22%; inside-bar 42.8% / −0.14%;
+NR7 45.5% / −0.17%; trend pullback 48.3% / **−0.09%** (best); reclaim 42.0% /
+−0.41%. **Nothing positive.** Six exit schemes (EOD, 0.5/1.0, 1.0/1.5, 1.0/3.0,
+2.0/3.0 ATR, trailing) all land at −0.21% to −0.23% — the exit is not the driver.
+
+### Candlestick patterns, daily (41,650 signals, 2017–2026)
+
+The 5m result looked like a cost artefact (spread on a 0.15% range). On daily bars
+the range is ~2%, so the drag vanishes — and the raw means do turn positive
+(pullback +0.23%, hammer +0.21%). **But the unconditional baseline is +0.147%**,
+and rule win rates sit within 1.8pp of the baseline's 46.4%. Excess over the
+baseline is −0.15% to +0.08%: nothing.
+
+The one significant result is **negative**: buying daily breakouts underperforms
+random entry at **t = −5.09**.
+
+### Fading the breakout (17,054 signals)
+
+Shorting the same signals is genuinely profitable gross — excess **+0.11%,
+t = +3.57** — so the long result was not an artefact. But the edge is 3–5× smaller
+than the cost of being short: net **−0.19%** at 0.30% cost, **−0.49%** at 0.60%.
+Sign is unstable by year (negative in 2023, 2024, 2025) and the median trade loses
+(−1.21%) with P&L riding a tail. Trading 212 Invest/ISA cannot short at all.
+
+### The transferable lesson
+
+**Subtract the unconditional baseline before believing any positive mean.** In a
+rising market every long entry has positive drift; the excess is the only number
+that means anything. Four of the six daily rules show a positive raw mean and every
+one is worthless once the baseline is removed. This is the single biggest error in
+retail backtesting.
+
+Corollary: **at both resolutions the residual mispricing is smaller than the
+friction.** When measured edge and measured cost are the same order of magnitude,
+you are not looking at an opportunity.
+
 ## Merger Arbitrage — In Progress
 
 Building a merger arbitrage strategy using SEC EDGAR 8-K filings and Loughran-McDonald sentiment analysis.
