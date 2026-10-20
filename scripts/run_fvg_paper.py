@@ -35,13 +35,15 @@ def run_signals(args):
 
 def run_executor(args, signals):
     """Start the PaperExecutor daemon."""
-    print("[run_fvg_paper] Starting PaperExecutor (polling every 60s)...")
+    print("[run_fvg_paper] Starting PaperExecutor (FVG intraday strategy)...")
     executor = PaperExecutor(
         signals_file=str(ROOT / "signals.json"),
         broker="alpaca",
         market="US",
         poll_seconds=60,
         log_file=str(ROOT / "paper_trades.csv"),
+        strategy="fvg",
+        close_mode="intraday",
     )
     try:
         executor.run()

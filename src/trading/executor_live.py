@@ -238,6 +238,10 @@ class ActivePosition:
     exit_reason:  Optional[str] = None
     exit_price:   Optional[float] = None
     pnl_bps:      Optional[float] = None
+    # Overnight tracking
+    bar_date:     Optional[str] = None   # date engulfing bar formed (for overnight)
+    close_mode:   Literal["intraday", "overnight"] = "intraday"
+    close_deadline_ts: Optional[pd.Timestamp] = None  # close by this time
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -268,12 +272,16 @@ class PaperExecutor:
         market: Literal["US", "UK"] = "US",
         poll_seconds: int = 5,
         log_file: str = "paper_trades.csv",
+        strategy: str = "fvg",          # tag for portfolio tracking
+        close_mode: Literal["intraday", "overnight"] = "intraday",
     ):
         self.signals_file = Path(signals_file)
-        self.market      = market.upper()
+        self.market       = market.upper()
         self.poll_seconds = poll_seconds
-        self.log_file    = Path(log_file)
-        self._stop       = Event()
+        self.log_file     = Path(log_file)
+        self.strategy     = strategy        # "fvg" or "engulfing"
+        self.close_mode   = close_mode      # "intraday" or "overnight"
+        self._stop        = Event()
 
         # Initialise broker backend
         if broker == "alpaca":
@@ -359,13 +367,29 @@ class PaperExecutor:
                 continue  # already have an active position
 
             sig_ts = pd.Timestamp(sig.get("timestamp"))
-            # Staleness check
+            # Staleness check: skip signals older than STALENESS_BARS poll intervals.
+            # For overnight mode, allow up to 2 trading days (covers Fri→Mon gap).
             bars_old = self._bar_count - (sig_ts.value // (self.poll_seconds * 10**9))
-            if bars_old > self.STALENESS_BARS:
-                logger.info("[%s] Skipping stale signal for %s (%d bars old)", self.market, sym, bars_old)
+            max_stale = 96 if self.close_mode == "overnight" else self.STALENESS_BARS  # 96 polls ≈ 16 h
+            if bars_old > max_stale:
+                logger.info("[%s] Skipping stale signal for %s (%d bars old, max %d)",
+                            self.market, sym, bars_old, max_stale)
                 continue
 
             self._open_position(sig, now)
+
+    def _close_deadline_for(self, sig_ts: pd.Timestamp) -> pd.Timestamp:
+        """Return the next trading day's 16:00 ET close deadline for overnight positions.
+        Entry fires at next open; position must be flat by that day's 16:00 ET.
+        Handles weekends: Fri engulfing → deadline is Mon 16:00 ET.
+        """
+        # Next trading day = sig_ts + 1 calendar day, skipping weekends
+        next_day = sig_ts.normalize() + pd.Timedelta(days=1)
+        while next_day.weekday() >= 5:   # skip Sat/Sun
+            next_day += pd.Timedelta(days=1)
+        # 16:00 ET = 20:00 UTC (winter) / 21:00 UTC (summer) — use 20:00 UTC as close-of-day proxy
+        # Close-of-day is roughly 20:00-21:00 UTC depending on DST; use 20:00 UTC conservatively
+        return next_day.replace(hour=20, minute=0, second=0, tzinfo=None)
 
     def _open_position(self, sig: dict, now: pd.Timestamp):
         sym         = sig["symbol"]
@@ -393,9 +417,17 @@ class PaperExecutor:
 
         # Submit limit order at entry_price (rounded to 2dp for Alpaca penny-increment compliance)
         side = "buy" if direction == "long" else "sell"
+        # For overnight engulfing: submit at next open using market order.
+        # entry_price is a close-of-engulfing-bar proxy; actual next-open fill is
+        # obtained via market order to avoid limit-order miss.
         entry_rounded = round(entry_price, 2)
         try:
-            if bars_old := self._bar_count - (sig_ts.value // (self.poll_seconds * 10**9)) < self.MARKET_ORDER_AGE:
+            if self.close_mode == "overnight":
+                # Market order: enter at actual next open
+                order_id = self.broker.submit_market_order(sym, qty, side)
+                logger.info("[%s] %s: overnight — market order at %.4f (proxy=%.4f)",
+                            self.market, sym, entry_rounded, entry_price)
+            elif bars_old := self._bar_count - (sig_ts.value // (self.poll_seconds * 10**9)) < self.MARKET_ORDER_AGE:
                 order_id = self.broker.submit_limit_order(sym, qty, entry_rounded, side)
             else:
                 order_id = self.broker.submit_market_order(sym, qty, side)
@@ -406,6 +438,9 @@ class PaperExecutor:
 
         stop_rounded = round(stop_price, 2)
         target_rounded = round(target, 2)
+
+        # Overnight: deadline = 16:00 ET next trading day
+        close_deadline = self._close_deadline_for(sig_ts) if self.close_mode == "overnight" else None
 
         self.positions[sym] = ActivePosition(
             symbol=sym,
@@ -419,6 +454,9 @@ class PaperExecutor:
             entry_time=None,
             order_id=order_id,
             status="pending",
+            bar_date=sig.get("bar_date"),
+            close_mode=self.close_mode,
+            close_deadline_ts=close_deadline,
         )
         logger.info(
             "[%s] OPEN %s %s qty=%.2f @ %.4f  stop=%.4f  target=%.4f",
@@ -456,13 +494,32 @@ class PaperExecutor:
                 self._close_position(sym, exit_reason, exit_price)
 
     def _check_time_exits(self):
-        """Force exit any position that has exceeded time_exit_bars."""
-        # Not implemented without live bar timestamps — placeholder
-        pass
+        """Force exit overnight positions by their close deadline, or intraday by 4 PM ET."""
+        now = pd.Timestamp.now()
+        for sym, pos in list(self.positions.items()):
+            if pos.status != "entered":
+                continue
 
-    def _close_position(self, sym: str, reason: str, exit_price: float):
+            # Intraday: close by 16:00 ET (21:00 UTC)
+            if self.close_mode == "intraday":
+                if now.hour >= 21:   # 4 PM ET = 21:00 UTC
+                    self._close_position(sym, "intraday_exit", None)
+                continue
+
+            # Overnight: close by configured deadline
+            if pos.close_deadline_ts and now >= pos.close_deadline_ts:
+                self._close_position(sym, "overnight_exit", None)
+
+    def _close_position(self, sym: str, reason: str, exit_price: Optional[float]):
         pos = self.positions[sym]
         side = "sell" if pos.direction == "long" else "buy"
+
+        # Fetch market price for time-based exits where no price was specified
+        if exit_price is None:
+            try:
+                exit_price = float(self._get_current_price(sym))
+            except Exception:
+                exit_price = pos.entry_price  # fallback
 
         try:
             self.broker.close_position(sym)
@@ -485,6 +542,7 @@ class PaperExecutor:
 
         self.trade_log.append({
             "symbol":       sym,
+            "strategy":     self.strategy,
             "direction":    pos.direction,
             "entry_time":   str(pos.entry_time or pos.signal_time),
             "exit_time":    str(pd.Timestamp.now()),
@@ -495,6 +553,7 @@ class PaperExecutor:
             "exit_reason":  reason,
             "atr":          pos.atr,
             "market":       self.market,
+            "close_mode":   pos.close_mode,
         })
 
         logger.info(
