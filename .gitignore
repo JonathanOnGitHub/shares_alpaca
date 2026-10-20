@@ -11,3 +11,6 @@ tensorflow/
 /tmp/
 *.egg-info/
 src/data/.edgar_cache/
+# Large trade-level backtest results (summary-only JSONs are kept)
+reports/fvg_results_0bps.json
+reports/fvg_results_10bps.json

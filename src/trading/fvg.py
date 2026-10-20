@@ -553,16 +553,15 @@ def print_results(results: Dict, title: str = "") -> None:
 
 
 def save_results(results: Dict, path: str) -> None:
+    """Save results stripping trade-level detail — summary only (keeps files small)."""
     out: Dict = {}
     for k, v in results.items():
         if k == "_meta":
             out[k] = v
-        elif isinstance(v, dict) and "all_trades" in v:
-            trades_only = [{kk: vv for kk, vv in t.items()
-                           if kk != "all_trades"}
-                          for t in v.get("all_trades", [])]
-            summary = {kk: vv for kk, vv in v.items() if kk != "all_trades"}
-            out[k] = {"summary": summary, "trades": trades_only}
+        elif isinstance(v, dict):
+            # Strip trade-level arrays; keep summary stats
+            summary = {kk: vv for kk, vv in v.items() if kk != "trades"}
+            out[k] = {"summary": summary}
         else:
             out[k] = v
     with open(path, "w") as f:
