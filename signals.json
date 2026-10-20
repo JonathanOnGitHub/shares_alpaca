@@ -1,0 +1,35 @@
+{
+  "signals": [
+    {
+      "symbol": "TSLA",
+      "direction": "long",
+      "entry_price": 377.36,
+      "stop_price": 365.62,
+      "target_price": 400.84,
+      "atr": 11.745,
+      "timestamp": "2026-10-20T15:58:35.610002",
+      "variant": "combined_bull_intraday"
+    },
+    {
+      "symbol": "LLY",
+      "direction": "long",
+      "entry_price": 1298.38,
+      "stop_price": 1260.61,
+      "target_price": 1373.92,
+      "atr": 37.7671,
+      "timestamp": "2026-10-20T15:58:36.876954",
+      "variant": "combined_bull_intraday"
+    },
+    {
+      "symbol": "UNH",
+      "direction": "long",
+      "entry_price": 418.6,
+      "stop_price": 405.55,
+      "target_price": 444.7,
+      "atr": 13.0525,
+      "timestamp": "2026-10-20T15:58:37.210529",
+      "variant": "combined_bull_intraday"
+    }
+  ],
+  "generated_at": "2026-10-20T15:58:38.265075"
+}

@@ -1,0 +1,58 @@
+{
+  "top10": {
+    "n_tickers": 10,
+    "n_trades": 876,
+    "ann_ret": 8248.52,
+    "ann_vol": 45.69,
+    "sharpe": 180.51,
+    "max_dd": -1098.6,
+    "avg_bps": 94.2,
+    "win_rate": 66.4,
+    "avg_win_bps": 237.2,
+    "avg_loss_bps": -189.1,
+    "trades_per_day": 0.35,
+    "elapsed_s": 0.1
+  },
+  "top20": {
+    "n_tickers": 20,
+    "n_trades": 1660,
+    "ann_ret": 13046.78,
+    "ann_vol": 39.98,
+    "sharpe": 326.31,
+    "max_dd": -1098.6,
+    "avg_bps": 78.6,
+    "win_rate": 64.9,
+    "avg_win_bps": 206.7,
+    "avg_loss_bps": -158.0,
+    "trades_per_day": 0.66,
+    "elapsed_s": 0.1
+  },
+  "top30": {
+    "n_tickers": 30,
+    "n_trades": 2431,
+    "ann_ret": 17077.93,
+    "ann_vol": 37.82,
+    "sharpe": 451.56,
+    "max_dd": -1794.4,
+    "avg_bps": 70.3,
+    "win_rate": 64.4,
+    "avg_win_bps": 192.9,
+    "avg_loss_bps": -151.7,
+    "trades_per_day": 0.96,
+    "elapsed_s": 0.1
+  },
+  "all60": {
+    "n_tickers": 60,
+    "n_trades": 4377,
+    "ann_ret": 29183.31,
+    "ann_vol": 35.23,
+    "sharpe": 828.29,
+    "max_dd": -1794.4,
+    "avg_bps": 66.7,
+    "win_rate": 64.5,
+    "avg_win_bps": 179.7,
+    "avg_loss_bps": -138.3,
+    "trades_per_day": 1.74,
+    "elapsed_s": 0.2
+  }
+}

@@ -196,191 +196,193 @@ def _run_single(
             bar_open  = float(o[j])
             bar_close = float(c[j])
 
-            # ── Bull FVG entry logic ──────────────────────────────────────────
-            if bull_zone_active and gap_ok_bull:
-                is_long_entry = False
-                entry_px: float = np.nan
-                stop_px: float = np.nan
-                tgt_px: float = np.nan
-                trade_approach = ""
+            if direction in ("bull", "both"):
+                # ── Bull FVG entry logic ──────────────────────────────────────────
+                if bull_zone_active and gap_ok_bull:
+                    is_long_entry = False
+                    entry_px: float = np.nan
+                    stop_px: float = np.nan
+                    tgt_px: float = np.nan
+                    trade_approach = ""
 
-                # Mean Reversion: bar low touches zone bottom, bar within zone
-                mr_reentry = (bar_low <= bfb) and (bar_high >= bft)
-                # Displacement: bar closes above zone top
-                disp = bar_close > bft
+                    # Mean Reversion: bar low touches zone bottom, bar within zone
+                    mr_reentry = (bar_low <= bfb) and (bar_high >= bft)
+                    # Displacement: bar closes above zone top
+                    disp = bar_close > bft
 
-                if approach == "mean_rev" and mr_reentry:
-                    is_long_entry = True
-                    entry_px = max(bar_open, bft)
-                    entry_px = min(entry_px, bar_close)
-                    entry_px = max(entry_px, bfb)
-                    trade_approach = "mean_rev"
-                elif approach == "continuation" and disp:
-                    is_long_entry = True
-                    entry_px = bar_open
-                    trade_approach = "continuation"
-                elif approach == "combined":
-                    # Combined: re-entry first, then displacement confirmation within 3 bars
-                    if mr_reentry:
+                    if approach == "mean_rev" and mr_reentry:
                         is_long_entry = True
-                        entry_px = bar_close
-                        trade_approach = "combined_reentry"
-                        # Walk forward up to 3 more bars for displacement confirmation
-                        confirmed = False
-                        for k in range(j + 1, min(j + 4, n - 1)):
-                            if c[k] > bft:   # displaced above zone
-                                entry_px = o[k]
-                                trade_approach = "combined"
-                                confirmed = True
-                                j = k         # update j to confirmed bar
-                                break
-                        if not confirmed:
-                            # No displacement within 3 bars — skip this FVG entirely
-                            is_long_entry = False
-                            entry_px = np.nan
-                            continue   # move to next scan bar, don't record trade
+                        entry_px = max(bar_open, bft)
+                        entry_px = min(entry_px, bar_close)
+                        entry_px = max(entry_px, bfb)
+                        trade_approach = "mean_rev"
+                    elif approach == "continuation" and disp:
+                        is_long_entry = True
+                        entry_px = bar_open
+                        trade_approach = "continuation"
+                    elif approach == "combined":
+                        # Combined: re-entry first, then displacement confirmation within 3 bars
+                        if mr_reentry:
+                            is_long_entry = True
+                            entry_px = bar_close
+                            trade_approach = "combined_reentry"
+                            # Walk forward up to 3 more bars for displacement confirmation
+                            confirmed = False
+                            for k in range(j + 1, min(j + 4, n - 1)):
+                                if c[k] > bft:   # displaced above zone
+                                    entry_px = o[k]
+                                    trade_approach = "combined"
+                                    confirmed = True
+                                    j = k         # update j to confirmed bar
+                                    break
+                            if not confirmed:
+                                # No displacement within 3 bars — skip this FVG entirely
+                                is_long_entry = False
+                                entry_px = np.nan
+                                continue   # move to next scan bar, don't record trade
 
-                if is_long_entry and not np.isnan(entry_px) and entry_px > 0:
-                    stop_px = bfb - 1.0 * atr14[j + 1]
-                    risk    = entry_px - stop_px
-                    if risk <= 0:
-                        continue
-                    tgt_px  = entry_px + 2.0 * risk
-                    fvg_entry_bar = j
-
-                    # ── Walk forward for exit ──────────────────────────────────
-                    exit_price: float = np.nan
-                    exit_bar   = -1
-                    exit_type  = "expired"
-
-                    if exit_mode == "intraday":
-                        exit_price = float(c[j + 1])
-                        exit_bar   = j + 1
-                        exit_type  = "intraday"
-                    else:
-                        for k in range(j + 1, n):
-                            kh = float(h[k]); kl = float(l[k])
-                            if kl <= stop_px:
-                                exit_price = float(stop_px)
-                                exit_bar   = k
-                                exit_type  = "stop"
-                                break
-                            if kh >= tgt_px:
-                                exit_price = float(tgt_px)
-                                exit_bar   = k
-                                exit_type  = "target"
-                                break
-
-                    if exit_bar > 0 and not np.isnan(exit_price):
-                        pnl_r = (exit_price - entry_px) / entry_px
-                        pnl_r -= cost_bps / 10_000
-                        pnl_bps = pnl_r * 10_000
-                        trades.append({
-                            "ticker":      ticker,
-                            "entry_date":  str(idx[fvg_entry_bar])[:10],
-                            "exit_date":   str(idx[exit_bar])[:10],
-                            "direction":   "long",
-                            "approach":    trade_approach,
-                            "entry_price": entry_px,
-                            "exit_price":  exit_price,
-                            "stop_price":  stop_px,
-                            "target_price":tgt_px,
-                            "pnl_r":       pnl_r,
-                            "pnl_bps":     pnl_bps,
-                            "ret_pct":     pnl_r * 100,
-                            "exit_type":   exit_type,
-                            "atr_entry":   atr14[fvg_entry_bar],
-                        })
-                    bull_zone_active = False   # FVG consumed
-
-            # ── Bear FVG entry logic ──────────────────────────────────────────
-            if bear_zone_active and gap_ok_bear:
-                is_short_entry = False
-                entry_px = np.nan
-                stop_px  = np.nan
-                tgt_px   = np.nan
-                trade_approach = ""
-
-                mr_reentry = (bar_high >= brt) and (bar_low <= brb)
-                disp = bar_close < brb
-
-                if approach == "mean_rev" and mr_reentry:
-                    is_short_entry = True
-                    entry_px = min(bar_open, brb)
-                    entry_px = max(entry_px, bar_close)
-                    entry_px = min(entry_px, brt)
-                    trade_approach = "mean_rev"
-                elif approach == "continuation" and disp:
-                    is_short_entry = True
-                    entry_px = bar_open
-                    trade_approach = "continuation"
-                elif approach == "combined":
-                    if mr_reentry:
-                        is_short_entry = True
-                        entry_px = bar_close
-                        trade_approach = "combined_reentry"
-                        confirmed = False
-                        for k in range(j + 1, min(j + 4, n - 1)):
-                            if c[k] < brb:
-                                entry_px = o[k]
-                                trade_approach = "combined"
-                                confirmed = True
-                                j = k
-                                break
-                        if not confirmed:
-                            is_short_entry = False
-                            entry_px = np.nan
+                    if is_long_entry and not np.isnan(entry_px) and entry_px > 0:
+                        stop_px = bfb - 1.0 * atr14[j + 1]
+                        risk    = entry_px - stop_px
+                        if risk <= 0:
                             continue
+                        tgt_px  = entry_px + 2.0 * risk
+                        fvg_entry_bar = j
 
-                if is_short_entry and not np.isnan(entry_px) and entry_px > 0:
-                    stop_px = brt + 1.0 * atr14[j + 1]
-                    risk    = stop_px - entry_px
-                    if risk <= 0:
-                        continue
-                    tgt_px  = entry_px - 2.0 * risk
-                    fvg_entry_bar = j
-
-                    if exit_mode == "intraday":
-                        exit_price = float(c[j + 1])
-                        exit_bar   = j + 1
-                        exit_type  = "intraday"
-                    else:
+                        # ── Walk forward for exit ──────────────────────────────────
                         exit_price: float = np.nan
                         exit_bar   = -1
                         exit_type  = "expired"
-                        for k in range(j + 1, n):
-                            kh = float(h[k]); kl = float(l[k])
-                            if kh >= stop_px:
-                                exit_price = float(stop_px)
-                                exit_bar   = k
-                                exit_type  = "stop"
-                                break
-                            if kl <= tgt_px:
-                                exit_price = float(tgt_px)
-                                exit_bar   = k
-                                exit_type  = "target"
-                                break
 
-                    if exit_bar > 0 and not np.isnan(exit_price):
-                        pnl_r = (entry_px - exit_price) / entry_px
-                        pnl_r -= cost_bps / 10_000
-                        pnl_bps = pnl_r * 10_000
-                        trades.append({
-                            "ticker":      ticker,
-                            "entry_date":  str(idx[fvg_entry_bar])[:10],
-                            "exit_date":   str(idx[exit_bar])[:10],
-                            "direction":   "short",
-                            "approach":    trade_approach,
-                            "entry_price": entry_px,
-                            "exit_price":  exit_price,
-                            "stop_price":  stop_px,
-                            "target_price":tgt_px,
-                            "pnl_r":       pnl_r,
-                            "pnl_bps":     pnl_bps,
-                            "ret_pct":     pnl_r * 100,
-                            "exit_type":   exit_type,
-                            "atr_entry":   atr14[fvg_entry_bar],
-                        })
+                        if exit_mode == "intraday":
+                            exit_price = float(c[j + 1])
+                            exit_bar   = j + 1
+                            exit_type  = "intraday"
+                        else:
+                            for k in range(j + 1, n):
+                                kh = float(h[k]); kl = float(l[k])
+                                if kl <= stop_px:
+                                    exit_price = float(stop_px)
+                                    exit_bar   = k
+                                    exit_type  = "stop"
+                                    break
+                                if kh >= tgt_px:
+                                    exit_price = float(tgt_px)
+                                    exit_bar   = k
+                                    exit_type  = "target"
+                                    break
+
+                        if exit_bar > 0 and not np.isnan(exit_price):
+                            pnl_r = (exit_price - entry_px) / entry_px
+                            pnl_r -= cost_bps / 10_000
+                            pnl_bps = pnl_r * 10_000
+                            trades.append({
+                                "ticker":      ticker,
+                                "entry_date":  str(idx[fvg_entry_bar])[:10],
+                                "exit_date":   str(idx[exit_bar])[:10],
+                                "direction":   "long",
+                                "approach":    trade_approach,
+                                "entry_price": entry_px,
+                                "exit_price":  exit_price,
+                                "stop_price":  stop_px,
+                                "target_price":tgt_px,
+                                "pnl_r":       pnl_r,
+                                "pnl_bps":     pnl_bps,
+                                "ret_pct":     pnl_r * 100,
+                                "exit_type":   exit_type,
+                                "atr_entry":   atr14[fvg_entry_bar],
+                            })
+                        bull_zone_active = False   # FVG consumed
+
+            if direction in ("bear", "both"):
+                # ── Bear FVG entry logic ──────────────────────────────────────────
+                if bear_zone_active and gap_ok_bear:
+                    is_short_entry = False
+                    entry_px = np.nan
+                    stop_px  = np.nan
+                    tgt_px   = np.nan
+                    trade_approach = ""
+
+                    mr_reentry = (bar_high >= brt) and (bar_low <= brb)
+                    disp = bar_close < brb
+
+                    if approach == "mean_rev" and mr_reentry:
+                        is_short_entry = True
+                        entry_px = min(bar_open, brb)
+                        entry_px = max(entry_px, bar_close)
+                        entry_px = min(entry_px, brt)
+                        trade_approach = "mean_rev"
+                    elif approach == "continuation" and disp:
+                        is_short_entry = True
+                        entry_px = bar_open
+                        trade_approach = "continuation"
+                    elif approach == "combined":
+                        if mr_reentry:
+                            is_short_entry = True
+                            entry_px = bar_close
+                            trade_approach = "combined_reentry"
+                            confirmed = False
+                            for k in range(j + 1, min(j + 4, n - 1)):
+                                if c[k] < brb:
+                                    entry_px = o[k]
+                                    trade_approach = "combined"
+                                    confirmed = True
+                                    j = k
+                                    break
+                            if not confirmed:
+                                is_short_entry = False
+                                entry_px = np.nan
+                                continue
+
+                    if is_short_entry and not np.isnan(entry_px) and entry_px > 0:
+                        stop_px = brt + 1.0 * atr14[j + 1]
+                        risk    = stop_px - entry_px
+                        if risk <= 0:
+                            continue
+                        tgt_px  = entry_px - 2.0 * risk
+                        fvg_entry_bar = j
+
+                        if exit_mode == "intraday":
+                            exit_price = float(c[j + 1])
+                            exit_bar   = j + 1
+                            exit_type  = "intraday"
+                        else:
+                            exit_price: float = np.nan
+                            exit_bar   = -1
+                            exit_type  = "expired"
+                            for k in range(j + 1, n):
+                                kh = float(h[k]); kl = float(l[k])
+                                if kh >= stop_px:
+                                    exit_price = float(stop_px)
+                                    exit_bar   = k
+                                    exit_type  = "stop"
+                                    break
+                                if kl <= tgt_px:
+                                    exit_price = float(tgt_px)
+                                    exit_bar   = k
+                                    exit_type  = "target"
+                                    break
+
+                        if exit_bar > 0 and not np.isnan(exit_price):
+                            pnl_r = (entry_px - exit_price) / entry_px
+                            pnl_r -= cost_bps / 10_000
+                            pnl_bps = pnl_r * 10_000
+                            trades.append({
+                                "ticker":      ticker,
+                                "entry_date":  str(idx[fvg_entry_bar])[:10],
+                                "exit_date":   str(idx[exit_bar])[:10],
+                                "direction":   "short",
+                                "approach":    trade_approach,
+                                "entry_price": entry_px,
+                                "exit_price":  exit_price,
+                                "stop_price":  stop_px,
+                                "target_price":tgt_px,
+                                "pnl_r":       pnl_r,
+                                "pnl_bps":     pnl_bps,
+                                "ret_pct":     pnl_r * 100,
+                                "exit_type":   exit_type,
+                                "atr_entry":   atr14[fvg_entry_bar],
+                            })
                     bear_zone_active = False
 
     # ── summary metrics ────────────────────────────────────────────────────
@@ -517,6 +519,242 @@ def run_all_variants(
     results["_meta"] = {"tickers": tickers, "start": start_date, "end": end_date,
                          "cost_bps": cost_bps, "min_gap_bps": min_gap_bps}
     return results
+
+
+def walk_forward_validate(
+    price_df: Dict[str, pd.DataFrame],
+    tickers: List[str],
+    train_years: int = 3,
+    test_years: int = 1,
+    n_windows: int = 8,
+    cost_bps: float = 0.0,
+    gap_candidates: Optional[List[float]] = None,
+) -> Dict:
+    """
+    Rolling walk-forward validation.
+
+    Each window:
+      Train: last `train_years` years  → evaluate min_gap_bps values by Sharpe
+      Test:  next `test_years` years   → apply best min_gap_bps from train
+
+    gap_candidates: list of min_gap_bps values to search (default: 0,5,10,15,20,25)
+    """
+    if gap_candidates is None:
+        gap_candidates = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0]
+
+    approaches  = ["mean_rev", "continuation", "combined"]
+    directions  = ["bull", "bear", "both"]
+    exit_modes  = ["intraday", "overnight"]
+
+    # ── Build window boundaries ──────────────────────────────────────────────
+    # Universe starts 2015; first train window starts 2015-01-01.
+    # With train=3yr, test=1yr: train ends 2017-12-31, test ends 2018-12-31.
+    # Last window: train ends ~2023-12-31, test ends 2024-12-31.
+    windows: List[Tuple[str, str, str, str]] = []
+    for w in range(n_windows):
+        # train: [train_start, train_end], test: [test_start, test_end]
+        train_end_yr = 2017 + w          # 2017, 2018, …, 2024
+        test_end_yr  = train_end_yr + 1  # 2018, 2019, …, 2025
+        train_start_yr = train_end_yr - train_years + 1
+        test_start_yr  = train_end_yr + 1
+
+        train_start = f"{train_start_yr}-01-01"
+        train_end   = f"{train_end_yr}-12-31"
+        test_start  = f"{test_start_yr}-01-01"
+        test_end    = f"{test_end_yr}-12-31"
+        windows.append((train_start, train_end, test_start, test_end))
+
+    # ── Rolling WFO ────────────────────────────────────────────────────────────
+    window_results: List[Dict] = []
+
+    for w_idx, (tr_start, tr_end, te_start, te_end) in enumerate(windows):
+        print(f"\n── Window {w_idx+1}/{n_windows}: train={tr_start}–{tr_end}  "
+              f"test={te_start}–{te_end}")
+
+        # ── In-sample: evaluate each gap_bps candidate ───────────────────────
+        train_results = run_all_variants(
+            price_df, tickers,
+            start_date=tr_start, end_date=tr_end,
+            min_gap_bps=0.0,      # run_all_variants doesn't filter by gap_bps
+            cost_bps=cost_bps,    # (we filter post-hoc below)
+        )
+
+        # ── Per approach/direction/exit: pick best min_gap_bps by train Sharpe
+        best_gap: Dict[str, float] = {}
+        for approach in approaches:
+            for direction in directions:
+                for exit_mode in exit_modes:
+                    key_prefix = f"{approach}_{direction}_{exit_mode}"
+                    # We have only one run per approach/direction/exit (gap_bps=0 run)
+                    # min_gap_bps is a FILTER applied at the individual-trade level,
+                    # but run_all_variants doesn't support per-trade gap filtering.
+                    # → We need to re-run per gap candidate.
+                    pass
+
+        # Re-run in-sample for each gap candidate
+        train_by_gap: Dict[float, Dict] = {}
+        for gap_bps in gap_candidates:
+            train_by_gap[gap_bps] = run_all_variants(
+                price_df, tickers,
+                start_date=tr_start, end_date=tr_end,
+                min_gap_bps=gap_bps,
+                cost_bps=cost_bps,
+            )
+
+        # Pick best gap for each variant
+        best_gap: Dict[str, float] = {}
+        for approach in approaches:
+            for direction in directions:
+                for exit_mode in exit_modes:
+                    combo_key = f"{approach}_{direction}_{exit_mode}"
+                    best_sharpe = -999.0
+                    best_g = 0.0
+                    for gap_bps, res in train_by_gap.items():
+                        r = res.get(combo_key, {})
+                        if r.get("n", 0) < 10:
+                            continue
+                        sh = r.get("sharpe", -999)
+                        if sh > best_sharpe:
+                            best_sharpe = sh
+                            best_g = gap_bps
+                    best_gap[combo_key] = best_g
+
+        # ── Out-of-sample: run with best gap per variant ──────────────────────
+        test_by_gap: Dict[float, Dict] = {}
+        for gap_bps in gap_candidates:
+            test_by_gap[gap_bps] = run_all_variants(
+                price_df, tickers,
+                start_date=te_start, end_date=te_end,
+                min_gap_bps=gap_bps,
+                cost_bps=cost_bps,
+            )
+
+        window_entry: Dict = {
+            "window": w_idx + 1,
+            "train_start": tr_start, "train_end": tr_end,
+            "test_start": te_start, "test_end": te_end,
+            "variants": {},
+        }
+
+        for approach in approaches:
+            for direction in directions:
+                for exit_mode in exit_modes:
+                    combo_key = f"{approach}_{direction}_{exit_mode}"
+                    gap = best_gap.get(combo_key, 0.0)
+                    tr_r = train_by_gap[gap].get(combo_key, {})
+                    te_r = test_by_gap[gap].get(combo_key, {})
+
+                    def _s(r: Dict) -> Dict:
+                        return {
+                            "n":         r.get("n", 0),
+                            "ann_ret":   r.get("ann_ret", 0.0) * 100,
+                            "sharpe":    r.get("sharpe", 0.0),
+                            "max_dd":    r.get("max_dd", 0.0),
+                            "win_rate":  r.get("win_rate", 0.0),
+                            "avg_bps":   r.get("avg_bps", 0.0),
+                            "stop_rate": r.get("stop_rate", 0.0),
+                        }
+
+                    window_entry["variants"][combo_key] = {
+                        "train":         _s(tr_r),
+                        "test":          _s(te_r),
+                        "selected_gap":  gap,
+                    }
+
+        window_results.append(window_entry)
+
+    # ── Aggregate across windows ──────────────────────────────────────────────
+    # Per-variant: mean + std of test Sharpe across windows
+    agg: Dict = {}
+    for approach in approaches:
+        for direction in directions:
+            for exit_mode in exit_modes:
+                combo_key = f"{approach}_{direction}_{exit_mode}"
+                test_sharpes  = [wr["variants"][combo_key]["test"]["sharpe"]
+                                 for wr in window_results
+                                 if wr["variants"][combo_key]["test"]["n"] > 0]
+                test_ann_rets = [wr["variants"][combo_key]["test"]["ann_ret"]
+                                 for wr in window_results
+                                 if wr["variants"][combo_key]["test"]["n"] > 0]
+                test_max_dds  = [wr["variants"][combo_key]["test"]["max_dd"]
+                                 for wr in window_results
+                                 if wr["variants"][combo_key]["test"]["n"] > 0]
+                if not test_sharpes:
+                    continue
+                agg[combo_key] = {
+                    "n_windows":        len(test_sharpes),
+                    "test_sharpe_mean": float(np.mean(test_sharpes)),
+                    "test_sharpe_std":  float(np.std(test_sharpes)),
+                    "test_ann_mean":    float(np.mean(test_ann_rets)),
+                    "test_max_dd_mean": float(np.mean(test_max_dds)),
+                    "selected_gaps":    [wr["variants"][combo_key]["selected_gap"]
+                                         for wr in window_results],
+                }
+
+    return {
+        "window_results": window_results,
+        "aggregated":     agg,
+        "params": {
+            "train_years": train_years,
+            "test_years":  test_years,
+            "n_windows":   n_windows,
+            "cost_bps":    cost_bps,
+            "gap_candidates": gap_candidates,
+            "n_tickers":   len(tickers),
+        },
+    }
+
+
+def print_fvg_wfo_results(wfo: Dict) -> None:
+    """Pretty-print FVG walk-forward validation results."""
+    p = wfo["params"]
+    print(f"\n{'═'*72}")
+    print(f"  FVG WALK-FORWARD VALIDATION")
+    print(f"  Train: {p['train_years']}yr  Test: {p['test_years']}yr  "
+          f"Windows: {p['n_windows']}  Cost: {p['cost_bps']} bps")
+    print(f"  Universe: {p['n_tickers']} tickers  "
+          f"Gap candidates: {p['gap_candidates']}")
+    print(f"{'═'*72}")
+
+    agg = wfo.get("aggregated", {})
+    if not agg:
+        print("No results.")
+        return
+
+    header = (f"{'Variant':<32} {'N_win':>5} "
+              f"{'Test Sharpe μ':>12} {'σ':>6} "
+              f"{'Test Ann% μ':>11} {'Test DD% μ':>12} "
+              f"{'Sel. gaps':>22}")
+    print(header)
+    print("─" * 105)
+
+    for key, v in sorted(agg.items(), key=lambda x: x[1]["test_sharpe_mean"], reverse=True):
+        gaps = v.get("selected_gaps", [])
+        gaps_str = ", ".join(f"{g:.0f}" for g in gaps) if gaps else "—"
+        print(
+            f"{key:<32} {v['n_windows']:>5} "
+            f"{v['test_sharpe_mean']:>12.2f} {v['test_sharpe_std']:>6.2f} "
+            f"{v['test_ann_mean']:>11.1f} {v['test_max_dd_mean']:>12.1f} "
+            f"{gaps_str:>22}"
+        )
+    print("─" * 105)
+
+    # Per-window breakdown
+    print(f"\nPer-window test Sharpe:")
+    wr_header = f"{'Window':>6} {'TrainPeriod':>22} {'TestPeriod':>22}"
+    for key in sorted(agg.keys()):
+        wr_header += f" {key[:12]:>13}"
+    print(wr_header)
+    print("─" * 200)
+    for w_idx, wr in enumerate(wfo.get("window_results", [])):
+        tr_p = f"{wr['train_start']}–{wr['train_end']}"
+        te_p = f"{wr['test_start']}–{wr['test_end']}"
+        row = f"{w_idx+1:>6} {tr_p:>22} {te_p:>22}"
+        for key in sorted(agg.keys()):
+            v = wr["variants"].get(key, {})
+            s = v.get("test", {})
+            row += f" {s.get('sharpe', 0):>13.2f}"
+        print(row)
 
 
 def print_results(results: Dict, title: str = "") -> None:

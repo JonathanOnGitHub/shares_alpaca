@@ -14,3 +14,16 @@ src/data/.edgar_cache/
 # Large trade-level backtest results (summary-only JSONs are kept)
 reports/fvg_results_0bps.json
 reports/fvg_results_10bps.json
+reports/engulfing_results.json
+reports/engulfing_wfo_results.json
+reports/orb_backtest_20261003T072719Z.json
+reports/orb_backtest_20261003T073035Z.json
+reports/BTCXRP_1d_20261003_103552.json
+reports/pair_report_BTC_XRP_20261003_103552.json
+reports/summary_report_20261003_103552.json
+reports/annual_basket_comparison.json
+reports/rolling_top_vs_bottom_100_universe.json
+reports/fvg_wfo_0bps.json
+reports/fvg_wfo_10bps.json
+# Data cache
+data/universe_rankings.pkl
