@@ -376,6 +376,12 @@ class PaperExecutor:
         atr         = float(sig["atr"])
         sig_ts      = pd.Timestamp(sig.get("timestamp"))
 
+        # Guard: skip if already held at broker (handles re-run / duplicate signal races)
+        broker_positions = {p.symbol for p in self.broker.client.get_all_positions()}
+        if sym in broker_positions:
+            logger.info("[%s] %s already open at broker — skipping", self.market, sym)
+            return
+
         # Position sizing: risk 1% of capital per trade
         risk_pct  = 0.01
         risk_amt  = self.capital * risk_pct
