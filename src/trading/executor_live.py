@@ -391,11 +391,12 @@ class PaperExecutor:
             return
         qty = risk_amt / stop_dist
 
-        # Submit limit order at entry_price
+        # Submit limit order at entry_price (rounded to 2dp for Alpaca penny-increment compliance)
         side = "buy" if direction == "long" else "sell"
+        entry_rounded = round(entry_price, 2)
         try:
             if bars_old := self._bar_count - (sig_ts.value // (self.poll_seconds * 10**9)) < self.MARKET_ORDER_AGE:
-                order_id = self.broker.submit_limit_order(sym, qty, entry_price, side)
+                order_id = self.broker.submit_limit_order(sym, qty, entry_rounded, side)
             else:
                 order_id = self.broker.submit_market_order(sym, qty, side)
                 logger.info("[%s] %s: market order (signal stale)", self.market, sym)
@@ -403,12 +404,15 @@ class PaperExecutor:
             logger.error("[%s] Order submission failed for %s: %s", self.market, sym, e)
             return
 
+        stop_rounded = round(stop_price, 2)
+        target_rounded = round(target, 2)
+
         self.positions[sym] = ActivePosition(
             symbol=sym,
             direction=direction,
-            entry_price=entry_price,
-            stop_price=stop_price,
-            target_price=target,
+            entry_price=entry_rounded,
+            stop_price=stop_rounded,
+            target_price=target_rounded,
             atr=atr,
             qty=qty,
             signal_time=sig_ts,
