@@ -242,6 +242,7 @@ class ActivePosition:
     bar_date:     Optional[str] = None   # date engulfing bar formed (for overnight)
     close_mode:   Literal["intraday", "overnight"] = "intraday"
     close_deadline_ts: Optional[pd.Timestamp] = None  # close by this time
+    entry_filled_price: Optional[float] = None  # actual fill price for market orders
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -367,13 +368,15 @@ class PaperExecutor:
                 continue  # already have an active position
 
             sig_ts = pd.Timestamp(sig.get("timestamp"))
-            # Staleness check: skip signals older than STALENESS_BARS poll intervals.
-            # For overnight mode, allow up to 2 trading days (covers Fri→Mon gap).
-            bars_old = self._bar_count - (sig_ts.value // (self.poll_seconds * 10**9))
-            max_stale = 96 if self.close_mode == "overnight" else self.STALENESS_BARS  # 96 polls ≈ 16 h
-            if bars_old > max_stale:
-                logger.info("[%s] Skipping stale signal for %s (%d bars old, max %d)",
-                            self.market, sym, bars_old, max_stale)
+            # Staleness check: allow up to max_stale_seconds of calendar time.
+            # For overnight, signals are re-generated daily at 17:00 BST — the wrapper
+            # script itself acts as the freshness mechanism; the executor just needs to
+            # avoid re-processing a stale signal within the same session.
+            elapsed_s = (now - sig_ts).total_seconds()
+            max_stale_s = 57600 if self.close_mode == "overnight" else self.STALENESS_BARS * self.poll_seconds
+            if elapsed_s > max_stale_s:
+                logger.info("[%s] Skipping stale signal for %s (%.1f h old, max %.1f h)",
+                            self.market, sym, elapsed_s / 3600, max_stale_s / 3600)
                 continue
 
             self._open_position(sig, now)
@@ -466,10 +469,34 @@ class PaperExecutor:
     def _monitor_positions(self):
         """Check stop / target hits on all entered positions."""
         for sym, pos in list(self.positions.items()):
+            # Transition pending → entered once broker confirms fill; record actual price
+            if pos.status == "pending":
+                try:
+                    if self._is_filled(sym, pos.order_id):
+                        pos.status = "entered"
+                        pos.entry_time = pd.Timestamp.now()
+                        # For market orders, fetch the actual fill price from broker
+                        if pos.entry_filled_price is None:
+                            try:
+                                fill_price = self._get_fill_price(sym, pos.order_id)
+                                pos.entry_filled_price = round(fill_price, 4)
+                                # Update capital allocation based on actual risk
+                                actual_risk = abs(fill_price - pos.stop_price)
+                                if actual_risk > 0:
+                                    pos.qty = (self.capital * 0.01) / actual_risk
+                            except Exception:
+                                pass
+                        logger.info("[%s] %s FILLED at %.4f (entry_price proxy was %.4f)",
+                                    self.market, sym,
+                                    pos.entry_filled_price or pos.entry_price, pos.entry_price)
+                    continue   # not yet filled — skip stop/target checks
+                except Exception:
+                    continue
+
             if pos.status != "entered":
                 continue
 
-            # Get current market price (use latest bar from signal_gen_service's live.jsonl)
+            # Get current market price
             try:
                 current_price = self._get_current_price(sym)
             except Exception:
@@ -479,6 +506,8 @@ class PaperExecutor:
             exit_reason = None
             exit_price  = None
 
+            # Use actual fill price for P&L if available; proxy entry_price otherwise
+            entry_px = pos.entry_filled_price or pos.entry_price
             if pos.direction == "long":
                 if current_price <= pos.stop_price:
                     should_exit, exit_reason, exit_price = True, "stop", pos.stop_price
@@ -546,7 +575,7 @@ class PaperExecutor:
             "direction":    pos.direction,
             "entry_time":   str(pos.entry_time or pos.signal_time),
             "exit_time":    str(pd.Timestamp.now()),
-            "entry_price":  pos.entry_price,
+            "entry_price":  pos.entry_filled_price or pos.entry_price,
             "exit_price":   exit_price,
             "qty":          pos.qty,
             "pnl_bps":      pnl_bps,
@@ -591,6 +620,36 @@ class PaperExecutor:
                 except Exception:
                     continue
         raise ValueError(f"Cannot find current price for {symbol}")
+
+    def _is_filled(self, symbol: str, order_id: Optional[str]) -> bool:
+        """Return True if the order has been filled at the broker."""
+        if not order_id or not isinstance(self.broker, AlpacaBackend):
+            return False
+        try:
+            from src.data.alpaca_client import AlpacaClient
+            client = AlpacaClient(paper=True)
+            orders = client.trading_client.get_orders(status="all", limit=10)
+            for o in orders:
+                if str(getattr(o, "id", "")) == str(order_id):
+                    return getattr(o, "status", "") in ("filled", "partially_filled")
+        except Exception:
+            pass
+        return False
+
+    def _get_fill_price(self, symbol: str, order_id: Optional[str]) -> float:
+        """Return the average fill price of a filled order."""
+        if not order_id or not isinstance(self.broker, AlpacaBackend):
+            return 0.0
+        try:
+            from src.data.alpaca_client import AlpacaClient
+            client = AlpacaClient(paper=True)
+            orders = client.trading_client.get_orders(status="all", limit=10)
+            for o in orders:
+                if str(getattr(o, "id", "")) == str(order_id) and getattr(o, "status", "") == "filled":
+                    return float(getattr(o, "filled_avg_price", 0) or 0)
+        except Exception:
+            pass
+        return 0.0
 
     def _write_log(self):
         if not self.trade_log:
