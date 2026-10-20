@@ -1,102 +1,72 @@
 #!/usr/bin/env python3
 """
-FVG Alpaca Paper Trading Runner
-===============================
-1. Fetch live FVG signals for top-20 universe
-2. Write signals.json
-3. Start Alpaca PaperExecutor to execute signals
+run_fvg_paper.py — FVG signal generator + Alpaca paper executor daemon.
 
 Usage:
-    python scripts/run_fvg_paper.py                  # generate signals + run executor
-    python scripts/run_fvg_paper.py --signals-only   # generate signals only (no executor)
-    python scripts/run_fvg_paper.py --date 2025-12-30  # backtest mode (requires --cache)
+    python scripts/run_fvg_paper.py                  # generate signals + run executor (daemon)
+    python scripts/run_fvg_paper.py --signals-only    # signals only, no executor
+    python scripts/run_fvg_paper.py --date 2026-10-20 # backtest a specific date (requires --cache)
 """
-
-import argparse, json, sys, time
-from datetime import datetime, date
+import argparse
+import sys
+import time
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))   # allow `from src` when run as script
+ROOT = Path(__file__).parent.parent.resolve()
+sys.path.insert(0, str(ROOT))
 
-def run():
-    parser = argparse.ArgumentParser(description="FVG Alpaca Paper Trading Runner")
-    parser.add_argument("--signals-only", action="store_true",
-                        help="Only generate signals, don't start executor")
-    parser.add_argument("--cache", action="store_true",
-                        help="Use cached price data (backtest / non-trading-day mode)")
-    parser.add_argument("--date", type=str, default=None,
-                        help="Run as-if on date YYYY-MM-DD (requires --cache)")
-    parser.add_argument("--top-n", type=int, default=20)
-    args = parser.parse_args()
+from src.trading.fvg_live import generate_signals
+from src.trading.executor_live import PaperExecutor
 
-    print(f"[{datetime.now():%H:%M:%S}] === FVG Paper Trading Runner ===")
-    print(f"  Mode     : {'Signals only' if args.signals_only else 'Signals + Executor'}")
-    print(f"  Universe : top-{args.top_n}")
-    print(f"  Date     : {args.date or 'live'}")
-    print()
-
-    # ── Step 1: Generate signals ────────────────────────────────────────────
-    from src.trading.fvg_live import generate_signals
-
-    t0 = time.time()
+def run_signals(args):
+    """Generate and save signals.json."""
+    print("[run_fvg_paper] Generating signals...")
     signals = generate_signals(
         top_n=args.top_n,
+        lookback=args.lookback,
         use_cache=args.cache,
         check_date=args.date,
     )
-    elapsed = time.time() - t0
-
-    signals_file = ROOT / "signals.json"
-    payload = {
-        "signals": signals,
-        "generated_at": datetime.now().isoformat(),
-        "mode": "backtest" if args.cache else "live",
-        "date": args.date or str(date.today()),
-    }
-    with open(signals_file, "w") as f:
-        json.dump(payload, f, indent=2)
-
-    print(f"[{datetime.now():%H:%M:%S}] Generated {len(signals)} signal(s) in {elapsed:.1f}s")
+    print(f"[run_fvg_paper] {len(signals)} signals written to signals.json")
     for s in signals:
-        print(f"  {s['symbol']}: entry={s['entry_price']:.4f}  "
-              f"stop={s['stop_price']:.4f}  target={s['target_price']:.4f}  "
-              f"R:R={abs(s['target_price']-s['entry_price'])/abs(s['entry_price']-s['stop_price']):.1f}:1")
-    print()
+        rr = abs(s["target_price"] - s["entry_price"]) / abs(s["entry_price"] - s["stop_price"])
+        print(f"  {s['symbol']}: entry={s['entry_price']}  stop={s['stop_price']}  target={s['target_price']}  R:R={rr:.2f}")
+    return signals
 
-    if args.signals_only:
-        print("Signals written. Exiting (--signals-only).")
-        return
-
-    if not signals:
-        print("No signals today. Executor would run but has nothing to do — exiting.")
-        return
-
-    # ── Step 2: Start executor ──────────────────────────────────────────────
-    print(f"[{datetime.now():%H:%M:%S}] Starting Alpaca PaperExecutor ...")
-    print(f"  Signals  : {signals_file}")
-    print(f"  Polling : 60s")
-    print()
-
-    import os
-    os.environ.setdefault("ALPACA_PAPER", "true")
-
-    from src.trading.executor_live import PaperExecutor
-
+def run_executor(args, signals):
+    """Start the PaperExecutor daemon."""
+    print("[run_fvg_paper] Starting PaperExecutor (polling every 60s)...")
     executor = PaperExecutor(
-        signals_file=str(signals_file),
+        signals_file=str(ROOT / "signals.json"),
         broker="alpaca",
         market="US",
         poll_seconds=60,
         log_file=str(ROOT / "paper_trades.csv"),
     )
-
     try:
         executor.run()
     except KeyboardInterrupt:
-        print(f"\n[{datetime.now():%H:%M:%S}] Interrupted — stopping executor.")
         executor.stop()
+        print("[run_fvg_paper] Stopped.")
 
+def main():
+    parser = argparse.ArgumentParser(description="FVG signal generator + Alpaca paper executor")
+    parser.add_argument("--signals-only", action="store_true", help="Only generate signals, don't run executor")
+    parser.add_argument("--top-n", type=int, default=20, help="Top-N tickers by ADV (default 20)")
+    parser.add_argument("--cache", action="store_true", help="Use cached universe_rankings.pkl instead of live yfinance")
+    parser.add_argument("--date", type=str, default=None, help="As-if date YYYY-MM-DD (requires --cache)")
+    parser.add_argument("--lookback", type=int, default=252, help="yfinance lookback bars (default 252)")
+    args = parser.parse_args()
+
+    if args.date and not args.cache:
+        print("[run_fvg_paper] --date requires --cache; falling back to live mode")
+        args.cache = False
+        args.date = None
+
+    signals = run_signals(args)
+
+    if not args.signals_only:
+        run_executor(args, signals)
 
 if __name__ == "__main__":
-    run()
+    main()

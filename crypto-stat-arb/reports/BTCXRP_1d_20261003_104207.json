@@ -1,0 +1,161 @@
+{
+  "results": [
+    {
+      "pair": "BTC/XRP",
+      "timeframe": "1d",
+      "cost_scenario": "base",
+      "analysis": {
+        "pearson_correlation": 0.866261599920746,
+        "pearson_pvalue": 0.0,
+        "spearman_correlation": 0.8975138540200345,
+        "spearman_pvalue": 0.0,
+        "beta": 0.7196934566769461,
+        "halflife": NaN,
+        "cointegration_pvalue": 0.3783861961653662,
+        "cointegration_conclusion": "not_cointegrated",
+        "max_zscore": 3.8779820335190194,
+        "excursion_stats": {
+          "pct_excursions_that_reverted": 100.0,
+          "avg_time_to_reversion_bars": 2.9873417721518987
+        }
+      },
+      "walk_forward": {
+        "aggregate_metrics": {},
+        "experiment_metadata": {}
+      },
+      "metrics": {},
+      "classification": "FRAGILE"
+    }
+  ],
+  "config": {
+    "pairs": [
+      "BTC",
+      "XRP",
+      "LINK",
+      "SOL"
+    ],
+    "pair_combinations": [
+      "BTC/XRP",
+      "BTC/LINK",
+      "BTC/SOL",
+      "XRP/LINK",
+      "XRP/SOL",
+      "LINK/SOL"
+    ],
+    "timeframes": [
+      "5m",
+      "15m",
+      "1h",
+      "4h",
+      "1d"
+    ],
+    "lookback_days": {
+      "5m": 30,
+      "15m": 60,
+      "1h": 720,
+      "4h": 720,
+      "1d": 1825
+    },
+    "cost_scenarios": {
+      "optimistic": {
+        "maker_fee": 0.0002,
+        "taker_fee": 0.0002,
+        "slippage_bps": 0.01,
+        "funding_rate_per_hour": 1e-05,
+        "short_rate_per_hour": 5e-05
+      },
+      "base": {
+        "maker_fee": 0.0004,
+        "taker_fee": 0.0004,
+        "slippage_bps": 0.02,
+        "funding_rate_per_hour": 3e-05,
+        "short_rate_per_hour": 0.0001
+      },
+      "pessimistic": {
+        "maker_fee": 0.0006,
+        "taker_fee": 0.0006,
+        "slippage_bps": 0.04,
+        "funding_rate_per_hour": 6e-05,
+        "short_rate_per_hour": 0.0002
+      }
+    },
+    "walk_forward": {
+      "train_days": 180,
+      "test_days": 30,
+      "roll_days": 30
+    },
+    "beta_lookbacks": [
+      "static",
+      30,
+      60,
+      90,
+      180
+    ],
+    "entry_thresholds": [
+      1.0,
+      1.5,
+      2.0,
+      2.5,
+      3.0
+    ],
+    "exit_types": [
+      "z0",
+      "z025",
+      "z050",
+      "time",
+      "stop"
+    ],
+    "exit_thresholds": {
+      "z0": 0.0,
+      "z025": 0.25,
+      "z050": 0.5,
+      "time": 12,
+      "stop": 3.0
+    },
+    "risk_limits": {
+      "max_position_pct": 0.2,
+      "max_gross_exposure": 2.0,
+      "max_net_exposure": 0.5,
+      "max_pair_exposure": 0.4,
+      "max_portfolio_exposure": 1.5,
+      "stop_loss_z": 3.0,
+      "max_holding_period_bars": 100
+    },
+    "classification": {
+      "robust_sharpe_min": 1.0,
+      "robust_pvalue_max": 0.1,
+      "fragile_pvalue_min": 0.1,
+      "no_edge_pvalue_min": 0.2
+    },
+    "data_source": {
+      "exchange": "binance",
+      "quote_currency": "USDT",
+      "timezone": "UTC",
+      "api_base_url": "https://api.binance.com",
+      "rate_limit_delay_ms": 500,
+      "max_retries": 3,
+      "timeout_seconds": 30
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    },
+    "random_seed": 42,
+    "analysis": {
+      "zscore_lookback": 30,
+      "correlation_windows": [
+        30,
+        60,
+        90
+      ],
+      "cointegration_window": 120,
+      "halflife_min": 5,
+      "halflife_max": 500
+    },
+    "backtest": {
+      "initial_capital": 100000.0,
+      "position_sizing": "volatility"
+    }
+  },
+  "timestamp": "20261003_104207"
+}

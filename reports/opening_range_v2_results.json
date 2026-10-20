@@ -1,0 +1,93 @@
+{
+  "summary": {
+    "n_trades": 244,
+    "n_tickers": 19,
+    "n_days": 39,
+    "trades_per_day": 6.26,
+    "win_rate": 44.7,
+    "ann_return_pct": -100.0,
+    "sharpe": -15.82,
+    "max_dd_pct": -100.0,
+    "avg_pnl": -9.06,
+    "total_pnl": -2211.13,
+    "best_trade": 195.01,
+    "worst_trade": -103.56,
+    "n_wins": 109,
+    "n_losses": 135,
+    "exit_reasons": {
+      "time_close": 219,
+      "stop": 24,
+      "target": 1
+    },
+    "pnl_at_1bps": -2213.57,
+    "pnl_at_2bps": -2216.01,
+    "pnl_at_5bps": -2223.33
+  },
+  "params": {
+    "risk_dollars": 100.0,
+    "cost_bps": 1.0,
+    "vol_ratio": 1.0,
+    "or_bars": 3,
+    "days": 60,
+    "n_tickers": 19
+  },
+  "by_ticker": {
+    "SPY": {
+      "n_trades": 21
+    },
+    "QQQ": {
+      "n_trades": 19
+    },
+    "IWM": {
+      "n_trades": 11
+    },
+    "AAPL": {
+      "n_trades": 13
+    },
+    "MSFT": {
+      "n_trades": 10
+    },
+    "NVDA": {
+      "n_trades": 15
+    },
+    "AMZN": {
+      "n_trades": 15
+    },
+    "META": {
+      "n_trades": 8
+    },
+    "GOOGL": {
+      "n_trades": 11
+    },
+    "TSLA": {
+      "n_trades": 13
+    },
+    "AMD": {
+      "n_trades": 16
+    },
+    "NFLX": {
+      "n_trades": 12
+    },
+    "CRM": {
+      "n_trades": 11
+    },
+    "ORCL": {
+      "n_trades": 11
+    },
+    "JPM": {
+      "n_trades": 11
+    },
+    "BAC": {
+      "n_trades": 10
+    },
+    "GS": {
+      "n_trades": 9
+    },
+    "XOM": {
+      "n_trades": 15
+    },
+    "CVX": {
+      "n_trades": 13
+    }
+  }
+}

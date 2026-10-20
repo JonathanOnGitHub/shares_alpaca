@@ -1,0 +1,26 @@
+{
+  "pair": "BTC/XRP",
+  "timeframe": "1d",
+  "cost_scenario": "base",
+  "analysis": {
+    "pearson_correlation": 0.8662615880412974,
+    "pearson_pvalue": 0.0,
+    "spearman_correlation": 0.8975138540200345,
+    "spearman_pvalue": 0.0,
+    "beta": 0.7196934768694834,
+    "halflife": NaN,
+    "cointegration_pvalue": 0.37839648874046844,
+    "cointegration_conclusion": "not_cointegrated",
+    "max_zscore": 3.8779821006037,
+    "excursion_stats": {
+      "pct_excursions_that_reverted": 100.0,
+      "avg_time_to_reversion_bars": 2.9873417721518987
+    }
+  },
+  "walk_forward": {
+    "aggregate_metrics": {},
+    "experiment_metadata": {}
+  },
+  "metrics": {},
+  "classification": "FRAGILE"
+}

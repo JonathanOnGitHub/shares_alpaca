@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "n_trades": 48,
+    "n_tickers": 15,
+    "n_days": 34,
+    "trades_per_day": 1.41,
+    "win_rate": 37.5,
+    "ann_return_pct": 285.7,
+    "sharpe": 2.95,
+    "max_dd_pct": -1.5,
+    "avg_pnl": 0.01,
+    "total_pnl": 0.36,
+    "best_trade": 0.97,
+    "worst_trade": -0.36,
+    "n_wins": 18,
+    "n_losses": 30
+  },
+  "by_ticker": {
+    "SPY": {
+      "n_trades": 0,
+      "error": null
+    },
+    "QQQ": {
+      "n_trades": 0,
+      "error": null
+    },
+    "AAPL": {
+      "n_trades": 0,
+      "error": null
+    },
+    "MSFT": {
+      "n_trades": 0,
+      "error": null
+    },
+    "NVDA": {
+      "n_trades": 0,
+      "error": null
+    },
+    "AMZN": {
+      "n_trades": 0,
+      "error": null
+    },
+    "META": {
+      "n_trades": 0,
+      "error": null
+    },
+    "TSLA": {
+      "n_trades": 0,
+      "error": null
+    },
+    "AMD": {
+      "n_trades": 0,
+      "error": null
+    },
+    "NFLX": {
+      "n_trades": 20,
+      "error": null
+    },
+    "JPM": {
+      "n_trades": 0,
+      "error": null
+    },
+    "GS": {
+      "n_trades": 0,
+      "error": null
+    },
+    "XOM": {
+      "n_trades": 28,
+      "error": null
+    },
+    "IWM": {
+      "n_trades": 0,
+      "error": null
+    },
+    "GLD": {
+      "n_trades": 0,
+      "error": null
+    }
+  }
+}

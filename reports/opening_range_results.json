@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "n_trades": 3575,
+    "n_tickers": 19,
+    "n_days": 2,
+    "trades_per_day": 1787.5,
+    "win_rate": 26.8,
+    "ann_return_pct": -100.0,
+    "sharpe": -36.68,
+    "max_dd_pct": -133.8,
+    "avg_pnl": -33.63,
+    "total_pnl": -120227.94,
+    "best_trade": 195.19,
+    "worst_trade": -237.61,
+    "n_wins": 959,
+    "n_losses": 2616,
+    "pnl_at_1bps": -120263.69,
+    "pnl_at_2bps": -120299.44,
+    "pnl_at_5bps": -120406.69
+  },
+  "by_ticker": {
+    "SPY": {
+      "n_trades": 284
+    },
+    "QQQ": {
+      "n_trades": 152
+    },
+    "IWM": {
+      "n_trades": 314
+    },
+    "AAPL": {
+      "n_trades": 156
+    },
+    "MSFT": {
+      "n_trades": 192
+    },
+    "NVDA": {
+      "n_trades": 232
+    },
+    "AMZN": {
+      "n_trades": 180
+    },
+    "META": {
+      "n_trades": 207
+    },
+    "GOOGL": {
+      "n_trades": 104
+    },
+    "TSLA": {
+      "n_trades": 159
+    },
+    "AMD": {
+      "n_trades": 227
+    },
+    "NFLX": {
+      "n_trades": 150
+    },
+    "CRM": {
+      "n_trades": 156
+    },
+    "ORCL": {
+      "n_trades": 112
+    },
+    "JPM": {
+      "n_trades": 155
+    },
+    "BAC": {
+      "n_trades": 230
+    },
+    "GS": {
+      "n_trades": 159
+    },
+    "XOM": {
+      "n_trades": 206
+    },
+    "CVX": {
+      "n_trades": 200
+    }
+  }
+}
