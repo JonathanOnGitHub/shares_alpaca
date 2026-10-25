@@ -116,8 +116,30 @@ def generate_signals(top_n: int = 20, lookback: int = 252, use_cache: bool = Fal
 
         last_bar_date = df.index[-1].date()
 
-        # Determine the reference date for signal emission
-        ref_date = target_date if target_date else last_bar_date
+        # Determine the reference date for signal emission.
+        #
+        # The reference date must be the last COMPLETED daily bar, not
+        # simply df.index[-1]. yfinance includes today's partial bar
+        # during the trading session, so the last row is an unfinished
+        # candle. Emitting a signal off an unfinished bar means the
+        # FVG "entry" is a live intraday price that can still move, and
+        # the bar_date is today rather than a settled session.
+        #
+        # Use the last bar that closed on or before the previous session
+        # when today is still in progress.
+        if target_date:
+            ref_date = target_date
+        else:
+            now_et = pd.Timestamp.now("America/New_York")
+            today_et = now_et.date()
+            ref_date = last_bar_date
+            if last_bar_date == today_et and now_et.hour < 16:
+                # Today's bar is still forming — step back one session.
+                closed = [d.date() for d in df.index
+                          if d is not None and pd.notna(d) and d.date() < today_et]
+                if not closed:
+                    continue
+                ref_date = max(closed)
 
         for sig in detect_bull_fvg(df):
             bar_date = pd.Timestamp(sig["bar_date"]).date()
@@ -137,6 +159,10 @@ def generate_signals(top_n: int = 20, lookback: int = 252, use_cache: bool = Fal
                 "target_price": round(target, 2),
                 "atr":          round(atr_val, 4),
                 "timestamp":     datetime.now().isoformat(),
+                # The bar the FVG fired on. The executor needs this to work
+                # out which session the trade is entered in (the open of the
+                # session AFTER the signal bar).
+                "bar_date":      str(sig["bar_date"]),
                 "variant":       "combined_bull_intraday",
             })
 

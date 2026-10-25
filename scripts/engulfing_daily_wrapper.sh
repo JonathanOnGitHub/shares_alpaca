@@ -41,7 +41,11 @@ else:
 if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     echo "$(date -Iseconds) — executor already running (PID $(cat "$PIDFILE"))" >> "$LOGFILE"
 else
-    nohup "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" >> "$LOGFILE" 2>&1 &
+    # setsid detaches the daemon into its own session/process group so it
+    # survives the cron runner's exit. Plain `nohup ... &` is not enough when
+    # the runner captures stdout via a pipe — the child keeps the pipe open
+    # and the parent blocks until timeout.
+    setsid "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" >> "$LOGFILE" 2>&1 < /dev/null &
     echo $! > "$PIDFILE"
     echo "$(date -Iseconds) — executor started PID $!" >> "$LOGFILE"
 fi

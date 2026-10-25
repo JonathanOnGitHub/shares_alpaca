@@ -27,3 +27,19 @@ reports/fvg_wfo_0bps.json
 reports/fvg_wfo_10bps.json
 # Data cache
 data/universe_rankings.pkl
+
+# ── Live/paper trading runtime artefacts ──────────────────────────────────
+# These are RUNTIME STATE, not source. Committing them would put a
+# live account's positions, PIDs and logs into git history.
+executor.log
+executor_engulfing.log
+executor.pid
+executor_engulfing.pid
+fvg_scanner.pid
+signals.json
+signals_engulfing.json
+.acted_*.json
+.positions_*.json
+# The trade log IS the audit trail, but it is machine-written and
+# rewritten in place; it is tracked separately from the source.
+paper_trades.csv

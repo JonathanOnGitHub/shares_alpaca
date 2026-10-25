@@ -13,6 +13,10 @@ import os
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+# US/Eastern — the reference timezone for all market-session logic.
+_ET = ZoneInfo("America/New_York")
 
 ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(ROOT))
@@ -73,20 +77,37 @@ def read_trades() -> list[dict]:
         return list(reader)
 
 def calc_pnl(trades: list[dict]) -> dict:
-    """Compute daily and total P&L from trade log."""
-    today = str(date.today())
+    """Compute daily and total P&L from trade log.
+
+    "Today" is the US/Eastern calendar date, not the host's local date.
+    The host runs on BST and the US session closes at 16:00 ET = 21:00
+    BST, so the two agree during the trading day — but the report also
+    runs at other times, and a trade bucketed under the wrong day makes
+    the daily P&L line wrong. `exit_date` in the trade log is already an
+    ET date.
+    """
+    today = str(datetime.now(_ET).date())
     total_pnl = 0.0
     daily_pnl = 0.0
+    total_bps = 0.0
+    daily_bps = 0.0
     closed_trades = 0
+    unfilled = 0
     wins = 0
     losses = 0
 
     for t in trades:
         pnl = float(t.get("pnl", 0) or 0)
+        bps = float(t.get("pnl_bps", 0) or 0)
+        status = t.get("status", "")
         total_pnl += pnl
+        total_bps += bps
         if t.get("exit_date", "") == today:
             daily_pnl += pnl
-        if t.get("status", "") in ("closed", "stopped", "target"):
+            daily_bps += bps
+        if status == "unfilled":
+            unfilled += 1
+        elif status in ("closed", "stopped", "target"):
             closed_trades += 1
             if pnl > 0:
                 wins += 1
@@ -97,7 +118,10 @@ def calc_pnl(trades: list[dict]) -> dict:
     return {
         "total_pnl": total_pnl,
         "daily_pnl": daily_pnl,
+        "total_bps": total_bps,
+        "daily_bps": daily_bps,
         "closed_trades": closed_trades,
+        "unfilled": unfilled,
         "wins": wins,
         "losses": losses,
         "win_rate": win_rate,
@@ -109,7 +133,10 @@ def build_report() -> str:
     trades = read_trades()
     pnl = calc_pnl(trades)
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M ET")
+    # The label said "ET" but datetime.now() is HOST-LOCAL time (BST),
+    # so the report was timestamped 15:36 "ET" when it was 10:36 ET.
+    # Use the actual ET conversion.
+    now = datetime.now(_ET).strftime("%Y-%m-%d %H:%M ET")
 
     lines = [
         f"📊 FVG Paper Trading — P&L Report  ({now})",
@@ -147,8 +174,32 @@ def build_report() -> str:
         f"  Total closed : {pnl['closed_trades']} trades",
         f"  Wins / Losses: {pnl['wins']} / {pnl['losses']}",
         f"  Win rate     : {pnl['win_rate']*100:.1f}%",
-        f"  Daily P&L    : **${pnl['daily_pnl']:>+9,.2f}**",
-        f"  Cumulative   : **${pnl['total_pnl']:>+9,.2f}**",
+        f"  Daily P&L    : **${pnl['daily_pnl']:>+9,.2f}**  ({pnl['daily_bps']:+.1f} bps)",
+        f"  Cumulative   : **${pnl['total_pnl']:>+9,.2f}**  ({pnl['total_bps']:+.1f} bps)",
+    ]
+
+    if pnl["unfilled"]:
+        lines.append(f"  Unfilled     : {pnl['unfilled']} signal(s) never filled")
+
+    # Recent trades, so the report shows what actually happened rather
+    # than just an aggregate.
+    recent = [t for t in trades if t.get("status") in ("closed", "unfilled")][-8:]
+    if recent:
+        lines += ["", "**Recent Trades**"]
+        for t in recent:
+            bps = float(t.get("pnl_bps", 0) or 0)
+            pnl_d = float(t.get("pnl", 0) or 0)
+            lines.append(
+                f"  {t.get('exit_date','?'):10s}  {t.get('symbol','?'):6s} "
+                f"{(t.get('direction','') or '')[:4]:4s}  "
+                f"qty={float(t.get('qty',0) or 0):>6.2f}  "
+                f"entry={t.get('entry_price','?')}  "
+                f"exit={t.get('exit_price','-')}  "
+                f"{bps:>+7.1f} bps  ${pnl_d:>+7.2f}  "
+                f"{t.get('exit_reason','?')}"
+            )
+
+    lines += [
         "",
         f"  Paper trades log: {TRADE_LOG}",
     ]
