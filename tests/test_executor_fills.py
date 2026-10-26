@@ -342,6 +342,74 @@ def test_reconcile_flags_foreign_broker_position(tmp_path):
         "a foreign broker position was not flagged"
 
 
+# ── 6: an intraday entry must never rest as a LIMIT order ──────────────────
+
+def test_intraday_entry_is_a_market_order_not_a_limit(tmp_path):
+    """Regression: intraday entries were once submitted as LIMIT orders at
+    the signal bar's close price.
+
+    A limit order only fills if the market comes BACK to that price, so
+    every signal that ran away without touching the entry level was
+    silently dropped. That is both a selection bias (the live book
+    contained only the setups that happened to retrace, so it was not
+    the strategy that was backtested) and the direct cause of the four
+    "unfilled" rows in paper_trades.csv:
+        INTC / BAC / ORCL  (2026-10-22) - limit never reached
+        XOM               (2026-10-23) - limit never reached
+    The backtest enters at the signal bar's CLOSE, so the live entry
+    must be a market order.
+    """
+    broker = FakeBroker(price=50.64)
+    ex = make_executor(broker, tmp_path)
+
+    sig = {
+        "symbol": "BAC", "direction": "short",
+        "entry_price": 50.765, "stop_price": 50.8224, "target_price": 50.6501,
+        "atr": 0.1149, "risk_dollars": 100.0, "max_risk_mult": 2.0,
+        "bar_date": "2026-10-22", "bar_time_et": "09:35",
+        "timestamp": pd.Timestamp.now().isoformat(), "flat_time_et": "14:00",
+    }
+    ex._open_position(sig, pd.Timestamp.now(), "BAC|2026-10-22|09:35")
+
+    assert broker.submitted, "no order was submitted at all"
+    symbol, qty, side, order_type = broker.submitted[0]
+    assert order_type == "market", (
+        f"intraday entry was submitted as a {order_type} order - a limit "
+        f"order will not fill unless price retraces to the entry level"
+    )
+    assert symbol == "BAC" and side == "sell"
+
+
+def test_short_entry_qty_is_whole_shares(tmp_path):
+    """Regression: Alpaca's paper API rejects fractional short orders with
+    "fractional orders cannot be sold short" (42210000).
+
+    The INTC short of 2026-10-22 was submitted as 2.27 shares and was
+    rejected outright on two consecutive polls, so that signal never
+    reached the broker at all. Short quantities must be whole numbers.
+    """
+    broker = FakeBroker(price=87.36)
+    ex = make_executor(broker, tmp_path)
+
+    sig = {
+        "symbol": "INTC", "direction": "short",
+        "entry_price": 88.30, "stop_price": 88.645, "target_price": 87.6101,
+        "atr": 0.6899, "risk_dollars": 100.0, "max_risk_mult": 2.0,
+        "bar_date": "2026-10-22", "bar_time_et": "09:35",
+        "timestamp": pd.Timestamp.now().isoformat(), "flat_time_et": "14:00",
+    }
+    ex._open_position(sig, pd.Timestamp.now(), "INTC|2026-10-22|09:35")
+
+    assert broker.submitted, "no order was submitted at all"
+    _symbol, qty, side, _order_type = broker.submitted[0]
+    assert side == "sell"
+    assert float(qty).is_integer(), (
+        f"short submitted with fractional qty {qty} - Alpaca rejects "
+        f"fractional short orders outright"
+    )
+    assert int(qty) >= 1
+
+
 class _Handler(logging.Handler):
     def __init__(self):
         super().__init__()
