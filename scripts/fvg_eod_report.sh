@@ -21,6 +21,28 @@ echo "=== $(date -Iseconds) — FVG end-of-day report ===" >> "$REPO_DIR/executo
 # The intraday executor exits by itself once the session is over. If it
 # is still alive (wedged on a pending position, or killed mid-session),
 # stop it now so the next session starts from a clean process.
+#
+# Since the systemd migration the executor runs in its own unit, so it is
+# stopped with `systemctl --user stop` rather than by killing a PID from
+# a file. The legacy PID-file path is kept as a fallback for any daemon
+# still running from before the migration.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
+EXEC_UNIT="shares-alpaca-fvg-executor.service"
+SCAN_UNIT="shares-alpaca-fvg-scanner.service"
+
+if systemctl --user is-active --quiet "$EXEC_UNIT" 2>/dev/null; then
+    echo "stopping lingering FVG executor unit $EXEC_UNIT at end of session" >> "$REPO_DIR/executor.log"
+    systemctl --user stop "$EXEC_UNIT" >> "$REPO_DIR/executor.log" 2>&1 || true
+fi
+# The scanner exits by itself at 14:00 ET, but stop it too in case it is
+# wedged — it must never be left writing signals.json overnight.
+if systemctl --user is-active --quiet "$SCAN_UNIT" 2>/dev/null; then
+    echo "stopping lingering FVG scanner unit $SCAN_UNIT at end of session" >> "$REPO_DIR/executor.log"
+    systemctl --user stop "$SCAN_UNIT" >> "$REPO_DIR/executor.log" 2>&1 || true
+fi
+
 if [ -f "$REPO_DIR/executor.pid" ]; then
     PID="$(cat "$REPO_DIR/executor.pid" 2>/dev/null || true)"
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then

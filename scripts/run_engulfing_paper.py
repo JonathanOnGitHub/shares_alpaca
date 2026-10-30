@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import logging
+import signal
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -48,7 +49,7 @@ def run_signals(args):
 
     return signals
 
-def run_executor(args, signals):
+def run_executor(args, signals=None):
     print("[run_engulfing] Starting PaperExecutor (engulfing bull_overnight_tl10)...")
     # basicConfig() lives in the executor_live __main__ block, which never
     # runs for this daemon, so every INFO line was silently dropped. The
@@ -68,6 +69,19 @@ def run_executor(args, signals):
         strategy="engulfing",
         close_mode="overnight",
     )
+
+    # systemd stops the service with SIGTERM, so the daemon has to handle
+    # it. Without a handler, SIGTERM kills the process outright and the
+    # trade log and open positions are lost — the same failure the
+    # setsid daemon had whenever the gateway's cgroup was torn down.
+    # executor.run() already calls _close_all() and _write_log() on exit.
+    def _sig_handler(signum, frame):
+        print(f"[run_engulfing] Signal {signum} received — shutting down.")
+        executor.stop()
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
     try:
         executor.run()
     except KeyboardInterrupt:
@@ -77,11 +91,19 @@ def run_executor(args, signals):
 def main():
     parser = argparse.ArgumentParser(description="Engulfing bull_overnight_tl10 paper trader")
     parser.add_argument("--signals-only", action="store_true", help="Signals only, no executor")
+    parser.add_argument("--executor-only", action="store_true",
+                        help="Executor only, no signal generation (for the systemd unit)")
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--lookback", type=int, default=252)
     parser.add_argument("--date", type=str, default=None,
                         help="Emit signals as-if on this date (YYYY-MM-DD)")
     args = parser.parse_args()
+
+    # --executor-only is mutually exclusive with --signals-only: one
+    # generates signals, the other consumes them.
+    if args.executor_only:
+        run_executor(args)
+        return
 
     signals = run_signals(args)
 

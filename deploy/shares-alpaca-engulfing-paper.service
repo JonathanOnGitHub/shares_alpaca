@@ -1,0 +1,42 @@
+[Unit]
+Description=Shares Alpaca engulfing bull_overnight_tl10 paper trader
+Documentation=file:///home/burley/Personal/Trading/Shares_alpaca/scripts/engulfing_daily_wrapper.sh
+After=network-online.target
+Wants=network-online.target
+
+# This unit exists so the trader lives in its OWN systemd cgroup.
+# On 28 and 29 Oct the kernel OOM killer hit hermes-gateway.service
+# (7.4G peak) and systemd tore down every process in that cgroup with
+# SIGKILL -- including the engulfing daemon, which had been started by
+# the gateway's own cron job via setsid. setsid detaches the process
+# from the terminal and the session, but NOT from the cgroup, so the
+# daemon died with the gateway on both mornings and never traded.
+# A dedicated unit is not in the gateway's cgroup, so an OOM kill or a
+# gateway restart leaves the trader running.
+
+[Service]
+Type=simple
+WorkingDirectory=/home/burley/Personal/Trading/Shares_alpaca
+# --executor-only: the daily wrapper owns signal generation. The daemon
+# must NOT regenerate them -- doing so loads the whole yfinance universe
+# into memory (the biggest process in the gateway cgroup, and the one the
+# OOM killer picked) and would also overwrite the signals file mid-session.
+ExecStart=/home/burley/Personal/Trading/Shares_alpaca/.venv/bin/python /home/burley/Personal/Trading/Shares_alpaca/scripts/run_engulfing_paper.py --executor-only
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+# control-group, so any child of the executor dies with it rather than
+# being left behind holding broker state.
+KillMode=control-group
+KillSignal=SIGTERM
+# The executor handles SIGTERM by finishing the poll cycle, flattening
+# its own positions and writing the trade log.
+TimeoutStopSec=60
+# A hard ceiling so this unit can never be the victim of the global OOM
+# killer. The executor-only daemon sits at ~25 MB; 1G is generous.
+MemoryMax=1G
+StandardOutput=append:/home/burley/Personal/Trading/Shares_alpaca/executor_engulfing.log
+StandardError=append:/home/burley/Personal/Trading/Shares_alpaca/executor_engulfing.log
+
+[Install]
+WantedBy=default.target

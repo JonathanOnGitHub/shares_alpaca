@@ -1,0 +1,49 @@
+[Unit]
+Description=Shares Alpaca intraday FVG signal scanner (5-minute bars)
+Documentation=file:///home/burley/Personal/Trading/Shares_alpaca/scripts/fvg_daily_wrapper.sh
+After=network-online.target
+Wants=network-online.target
+
+# WHY THIS IS A SEPARATE UNIT:
+# The FVG scanner used to be started by the Hermes cron job via `setsid`.
+# setsid detaches a process from its terminal and session, but NOT from
+# the systemd cgroup it was launched in, so the scanner stayed inside
+# hermes-gateway.service's cgroup. When the kernel OOM killer hit the
+# gateway (7.4G peak on 28 and 29 Oct), systemd tore the whole cgroup
+# down with SIGKILL and the scanner died with it.
+#
+# A dedicated unit puts the scanner in its own cgroup, so an OOM kill or
+# a gateway restart leaves it running.
+#
+# This unit and shares-alpaca-fvg-executor.service are separate on
+# purpose: the scanner regenerates signals.json every 5 minutes during
+# the session, while the executor consumes that file. Folding them
+# together would mean one process writing the file the other reads.
+
+[Service]
+Type=simple
+WorkingDirectory=/home/burley/Personal/Trading/Shares_alpaca
+# --poll: rescan every 5 minutes until 14:00 ET. A single daily scan
+# would trade yesterday's setup and miss most of the day's signals.
+ExecStart=/home/burley/Personal/Trading/Shares_alpaca/.venv/bin/python /home/burley/Personal/Trading/Shares_alpaca/scripts/run_fvg_paper.py --poll --poll-seconds 300 --until-et 840
+Environment=PYTHONUNBUFFERED=1
+# on-failure, NOT always: the scanner's poll loop EXITS NORMALLY at
+# --until-et (14:00 ET) by design. Restart=always would restart it
+# immediately, it would exit again, and the unit would hot-loop all
+# afternoon. on-failure restarts it only if it CRASHES.
+Restart=on-failure
+RestartSec=15
+# control-group, so any child of the scanner dies with it rather than
+# being left behind writing to the signals file.
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
+# A hard ceiling so this unit can never be the victim of the global OOM
+# killer. The scanner peaks at ~113 MB RSS (22 symbols x 5 days of
+# 5-minute bars); 1G is generous.
+MemoryMax=1G
+StandardOutput=append:/home/burley/Personal/Trading/Shares_alpaca/executor.log
+StandardError=append:/home/burley/Personal/Trading/Shares_alpaca/executor.log
+
+[Install]
+WantedBy=default.target
