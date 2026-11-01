@@ -750,6 +750,78 @@ Corollary: **at both resolutions the residual mispricing is smaller than the
 friction.** When measured edge and measured cost are the same order of magnitude,
 you are not looking at an opportunity.
 
+## Experiment 13: Stop-Loss Impact and Momentum-Window Cost Sweep
+
+Scripts: [`technical-backtests/backtest_stop.py`](technical-backtests/backtest_stop.py),
+`diag_stop_costs.py`, `sweep_momentum_window_costs.py`.
+
+Question: the live momentum basket bot had no stop-loss. Does adding a trailing
+stop help? **No — at every level tested it is inert or slightly negative.** The
+sweep run to answer it also produced a more important result: **the 5-day
+momentum window the bot was just standardised to is the worst of the four tested
+once costs are charged.**
+
+Method: 240 tickers, 2017-01-01 → 2026-11-01 (deliberately spanning 2018Q4, the
+2020 crash and the 2022 bear — a stop's purpose is crash protection and a 3-year
+window contains no crash). Signal from the close, execution at the **next open**.
+Costs 0.15%/side (~30bp round trip, the T212 USD-share figure). Re-arm rule
+modelled: after a stop-out the name stays flat until momentum itself resets to
+cash, otherwise a stop instantly re-buys.
+
+### Stops do nothing
+
+| stop | portfolio CAGR | Sharpe | maxDD | paired ΔSharpe vs none | t | stops fired |
+|---|---|---|---|---|---|---|
+| none | −1.17% | −0.570 | −33.5% | — | — | — |
+| 5% | −1.20% | −0.620 | −31.7% | −0.005 | −1.02 | 6,669 |
+| 10% | −1.31% | −0.591 | −33.4% | −0.003 | −1.71 | 1,292 |
+| **15%** | **−1.20%** | **−0.574** | **−33.5%** | **−0.001** | **−0.71** | **343** |
+| 20% | −1.18% | −0.571 | −33.5% | −0.000 | −0.50 | 103 |
+| 30% | −1.17% | −0.570 | −33.5% | +0.000 | 1.02 | 16 |
+
+**Why:** a 5-day momentum exit is *faster* than a 15% trailing stop. In a sharp
+fall momentum goes negative within ~2 days and exits first, so the stop never
+gets reached — 343 events across 240 names in 9.8 years (0.14/name/year). A stop
+only fires when the decline is slow enough that 5d momentum stays positive while
+price sits 15% below peak, which is rare.
+
+**And when it does fire, it is a coin flip:** mean forward 20-day return after a
+15% stop-out is **+4.07%**, and the stock declined further only **50%** of the
+time. Tighter stops are worse — more churn, marginally lower Sharpe — because they
+repeatedly exit into rebounds.
+
+### The result that actually matters: cost drag
+
+| momentum window | sides/name/year | gross CAGR | net CAGR | gross Sharpe | net Sharpe |
+|---|---|---|---|---|---|
+| 5d | 50.5 | +6.59% | **−1.17%** | 0.188 | **−0.570** |
+| 10d | 35.0 | +9.68% | +4.08% | 0.468 | −0.048 |
+| **20d** | 23.9 | **+10.08%** | **+6.19%** | **0.502** | +0.149 |
+| 40d | 17.0 | +9.37% | +6.64% | 0.429 | **+0.188** |
+
+The 5-day window flips ~25 round trips/year/name. At 30bp that is **7.76%/yr of
+drag**, which consumes the entire gross edge and then some. Slower windows trade
+less *and* have a stronger gross signal — 20d beats 5d on both counts.
+
+**This inverted an earlier decision.** On 2026-11-01 the bot was standardised from
+20-day to 5-day momentum to match the quarterly screen, on the reasoning that the
+screen's gates (Sharpe 1.1 / ADX breadth 60) had been calibrated on the 5-day
+distribution. The single-source-of-truth mechanism was correct, but the *window
+choice* was the worse one: the screen's own 5-day window is what was wrong. Fix is
+to move both to 20d and recalibrate the gates, not to move the bot to 5d.
+
+### Lessons
+
+1. **A stop looser than your exit signal is decoration.** Measure the signal's own
+   reaction time before designing a stop around a percentage.
+2. **Turnover is a first-order term, not a footnote.** 30bp looks trivial per
+   trade and is 7.8%/yr at 50 trades per name.
+3. **Screen Sharpes are usually gross.** The T212 screen reports WFC at 1.21 Sharpe
+   with zero transaction costs; the same rule nets −0.57 portfolio Sharpe. Any
+   Sharpe quoted next to a high-turnover strategy needs its cost assumption stated.
+4. Survivorship bias: the universe is today's ticker list, which flatters the
+   baseline — i.e. it is conservative for the stop, not for the window comparison.
+
 ## Merger Arbitrage — In Progress
 
 Building a merger arbitrage strategy using SEC EDGAR 8-K filings and Loughran-McDonald sentiment analysis.
