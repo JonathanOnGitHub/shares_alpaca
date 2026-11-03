@@ -29,7 +29,7 @@ Three things have to be said together:
    sweep is negative. This repo has been here before — see the fade study in
    `technical-backtests/README.md`, whose edge also flipped sign by year.
 3. The return is **carried by a handful of days**: the best 5 days are
-   $62,482 of a $128,803 total (48%), and the median day is $0.00.
+   $60,886 of a $117,430 total (52%), and the median day is $0.00.
 
 ---
 
@@ -111,8 +111,9 @@ feed, with a shorter sample.
 | 2.0 | 90 | +1.1% | **−17.7%** | 0.09 | 544 | 2022:+2% 2023:−11% 2024:−4% 2025:−6% |
 
 **Two settings are positive in all four years** (VM 0.5/14 and VM 1.0/90) on
-the SIP feed. Three are negative in 2025. A band that only works when it is
-narrow *and* recent, or wide *and* slow, is not a robust parameterisation.
+the SIP feed. **Six of the eight are negative in 2025.** A band that only
+works when it is narrow *and* recent, or wide *and* slow, is not a robust
+parameterisation.
 
 The same sweep on the filtered IEX feed (≥300 bars) reproduces the shape but
 not the year-2025 signs exactly:
@@ -139,32 +140,40 @@ robust parameterisations, and 2025 was negative for VM 1.0/L14 on both.**
 ## The data-quality finding that changed the conclusion
 
 An earlier run on Alpaca's **IEX** feed showed 2025 negative at *every*
-parameter setting, which looked like regime decay. Filtering the gaps changed
-it: **10 of 1,002 IEX sessions had fewer than 300 bars** (one had 47), and
-dropping them lifted the excess from +20.4% to +26.4% and flipped 2025
-positive at VM 1.0/90 and VM 1.5/90.
+parameter setting, which looked like regime decay. That was an **artefact of an
+earlier, less faithful implementation** — before the volatility-window and
+dividend-adjustment corrections described below. It also had a genuine data
+component: **10 of 1,002 IEX sessions had fewer than 300 bars** (one had 47).
 
-The **SIP** feed is complete — 1,003 sessions, **zero** short sessions — and
-reproduces the filtered IEX result to within a couple of points:
+Re-measured with the current code, the data-quality effect is real but much
+smaller than first reported:
 
-| | excess | Sharpe | 2025 excess |
+| | excess (VM 1.0/L14) | Sharpe | 2025 excess |
 |---|---:|---:|---:|
-| IEX, unfiltered | +20.4% | — | negative at all 8 settings |
-| IEX, ≥300 bars | +26.4% | 1.28 | −5% (VM 1.0/L14), +4% (VM 1.0/L90) |
-| SIP, complete | +29.0% | 1.34 | −5% (VM 1.0/L14), +5% (VM 1.0/L90) |
+| IEX, unfiltered | +25.1% | 1.30 | −5% |
+| IEX, ≥300 bars | +26.4% | 1.28 | −5% |
+| SIP, complete | +29.0% | 1.34 | −5% |
 
-**So the data-quality filter and the SIP feed agree, and they disagree with
-the unfiltered run.** But the honesty caveat matters: the filter does *not*
-rescue every parameter. **VM 1.0/lookback 14 is negative in 2025 on both
-feeds, filtered and unfiltered.** That one is a real regime effect, not a
-data artefact.
+Filtering the short sessions moves the excess by **1.3pp**, not the 6pp
+originally claimed, and it does **not** flip any year's sign at VM 1.0/L14.
+What it does do is make the IEX and SIP results agree, which is the point: a
+venue with holes in the 1-minute series is not measuring the same thing as a
+complete one.
+
+The claim that 2025 was "negative at every setting" does not survive either.
+Under the current code, 2025 is positive at VM 1.0/L90 and VM 1.5/L90 on both
+feeds, and negative at VM 1.0/L14, VM 1.5/L14, VM 2.0/L14, VM 0.5/L90 and
+VM 2.0/L90.
+
+**So the honest version of this finding is: a negative result from a venue
+with holes in the 1-minute series may be an artefact — and this one partly
+was.** A 1-minute band is only meaningful on complete sessions, and
+incomplete sessions manufacture both fake signals and fake conclusions. But
+the size of that effect here was smaller than first claimed, and most of the
+original swing came from implementation error rather than from the data.
 
 `scripts/check_noise_band_data_quality.py --feed iex` reproduces the gap
-problem; the default SIP path passes trivially. **This is the single most
-important methodological point in this study: a negative result from a venue
-with holes in the 1-minute series may be an artefact.** A 1-minute band is
-only meaningful on complete sessions, and incomplete sessions manufacture both
-fake signals and fake conclusions.
+problem; the default SIP path passes trivially.
 
 ---
 

@@ -868,18 +868,23 @@ drawdown while taking less volatility than SPY itself.
 
 ### The two findings that matter
 
-**1. A negative result that turned out to be a data artefact.** The first sweep
-showed 2025 negative at *every* parameter setting, which read as regime decay.
-It wasn't: Alpaca's **IEX** feed leaves gaps in the 1-minute series (10 of 1,002
-sessions under 300 bars, one at 47). Filtering them lifted excess from +20.4%
-to +26.4%, and the complete **SIP** feed agrees. But **VM 1.0/lookback 14 stays
-negative in 2025 on both feeds** — that one is real. *A 1-minute band is only
-meaningful on whole sessions; incomplete sessions manufacture both fake signals
-and fake conclusions.*
+**1. A negative result that turned out to be mostly my own implementation
+error.** The first sweep showed 2025 negative at *every* parameter setting,
+which read as regime decay. Two things were going on: the implementation was
+not yet faithful to the authors' notebook (the volatility window and the
+dividend adjustment were both wrong), **and** Alpaca's **IEX** feed leaves
+gaps in the 1-minute series — 10 of 1,002 sessions have fewer than 300 bars,
+one has 47. Re-measured with the corrected code, filtering the short sessions
+moves the excess from +25.1% to +26.4% (**1.3pp, not the 6pp first claimed**)
+and flips no year's sign; the complete **SIP** feed gives +29.0%. What the
+filter buys is IEX/SIP agreement. **VM 1.0/lookback 14 stays negative in 2025
+on both feeds** — that one is real. *A 1-minute band is only meaningful on
+whole sessions; incomplete sessions manufacture both fake signals and fake
+conclusions.*
 
 **2. The edge does not survive every parameter.** Excess over always-long
 ranges **+29.0% to −17.7%** across the VM × lookback surface. Two settings are
-positive in all four years; three are negative in 2025.
+positive in all four years; **six of the eight are negative in 2025**.
 
 | VM | lookback | excess | 2022 | 2023 | 2024 | 2025 |
 |---|---|---|---|---|---|---|
