@@ -34,6 +34,7 @@ class AlpacaClient:
         lookback_days: int = 365,
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
+        feed: str = "iex",
     ) -> dict[str, pd.DataFrame]:
         tf_map = {
             "Day": TimeFrame(1, TimeFrameUnit.Day),
@@ -53,7 +54,7 @@ class AlpacaClient:
             start=start,
             end=end,
             adjustment="split",
-            feed="iex",
+            feed=feed,
         )
 
         bars = self.data_client.get_stock_bars(request)

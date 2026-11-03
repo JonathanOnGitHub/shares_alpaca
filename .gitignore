@@ -27,6 +27,7 @@ reports/fvg_wfo_0bps.json
 reports/fvg_wfo_10bps.json
 # Data cache
 data/universe_rankings.pkl
+data/cache_noise_band/
 
 # ── Live/paper trading runtime artefacts ──────────────────────────────────
 # These are RUNTIME STATE, not source. Committing them would put a
