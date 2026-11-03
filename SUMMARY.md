@@ -822,6 +822,100 @@ to move both to 20d and recalibrate the gates, not to move the bot to 5d.
 4. Survivorship bias: the universe is today's ticker list, which flatters the
    baseline — i.e. it is conservative for the stop, not for the window comparison.
 
+## Experiment 14: Noise Area Intraday Momentum (Zarattini et al. 2024)
+
+Scripts: [`src/trading/noise_band.py`](src/trading/noise_band.py),
+[`scripts/backtest_noise_band.py`](scripts/backtest_noise_band.py),
+[`scripts/sweep_noise_band.py`](scripts/sweep_noise_band.py),
+[`scripts/check_noise_band_data_quality.py`](scripts/check_noise_band_data_quality.py).
+Full write-up: [`reports/noise_band_summary.md`](reports/noise_band_summary.md).
+
+Question: does the "Noise Area" band of Zarattini, Aziz & Barbon (2024)
+[*Beat the Market*, SSRN 4824172](https://doi.org/10.2139/ssrn.4824172) have
+an edge on SPY once costs are charged? **Promising against the right control,
+but not deployable — the edge is parameter-sensitive and the return is
+tail-concentrated.**
+
+The band is **not** a Bollinger band and does not use a standard deviation. For
+each minute-of-day, `σ` is the mean over the prior 14 days of `|Close/Open − 1|`
+— the average absolute excursion from the open by that time of day — and the
+previous close is dividend-adjusted so an overnight gap widens the band. A
+breach means the market has moved further than it "normally" has by then.
+Implemented from the **authors' own reference notebook**, not from the prose:
+the notebook's defaults (`vol_target` sizing, `band_mult` 1, 2% vol target, 4×
+leverage cap) are what generate the published numbers, and they differ from
+what the body text implies.
+
+Method: Alpaca 1-minute bars, **SIP** feed (complete sessions), SPY,
+2022-01-03 → 2025-12-31 — 990 sessions, 390,761 bars, every session a full 390
+bars. Entry at the semi-hourly mark, VWAP-confirmed, exit on the opposite band
+or at the close. Costs $0.0035/share + $0.35/order minimum, no slippage.
+Control is the **always-long baseline**, sized identically, so only the excess
+means anything.
+
+### Results
+
+| | vol_target | always-long | SPY B&H |
+|---|---|---|---|
+| total return | **+117.4%** | −10.6% | +52.6% |
+| volatility | +14.7% | +27.9% | +17.8% |
+| Sharpe | **+1.40** | +0.04 | +0.69 |
+| max drawdown | **−15.7%** | −35.4% | −22.8% |
+
+Unlevered (`full_notional`): **+42.4%** vs +13.4% baseline, Sharpe **1.34** vs
+0.30, drawdown −6.8% vs −13.8% — **+29.0% excess**. Both beat SPY buy & hold on
+drawdown while taking less volatility than SPY itself.
+
+### The two findings that matter
+
+**1. A negative result that turned out to be a data artefact.** The first sweep
+showed 2025 negative at *every* parameter setting, which read as regime decay.
+It wasn't: Alpaca's **IEX** feed leaves gaps in the 1-minute series (10 of 1,002
+sessions under 300 bars, one at 47). Filtering them lifted excess from +20.4%
+to +26.4%, and the complete **SIP** feed agrees. But **VM 1.0/lookback 14 stays
+negative in 2025 on both feeds** — that one is real. *A 1-minute band is only
+meaningful on whole sessions; incomplete sessions manufacture both fake signals
+and fake conclusions.*
+
+**2. The edge does not survive every parameter.** Excess over always-long
+ranges **+29.0% to −17.7%** across the VM × lookback surface. Two settings are
+positive in all four years; three are negative in 2025.
+
+| VM | lookback | excess | 2022 | 2023 | 2024 | 2025 |
+|---|---|---|---|---|---|---|
+| 0.5 | 14 | +27.4% | +15% | +2% | +7% | +2% |
+| 1.0 | 14 | +29.0% | +20% | +5% | +7% | −5% |
+| 1.5 | 14 | +17.5% | +17% | −3% | +4% | −2% |
+| 2.0 | 14 | −5.5% | +2% | −9% | +2% | −3% |
+| 0.5 | 90 | −6.8% | −7% | −1% | +4% | −5% |
+| 1.0 | 90 | +22.4% | +7% | +2% | +6% | +5% |
+| 1.5 | 90 | −2.6% | +6% | −10% | −0% | −1% |
+| 2.0 | 90 | −17.7% | +2% | −11% | −4% | −6% |
+
+### Why it is not deployable yet
+
+The return is **tail-concentrated**: the best 5 days supply 39% (`full_notional`)
+to 52% (`vol_target`) of the total, the worst 5 supply −$8,784 to −$31,782, and
+the **median day is $0.00** with a 28.8% positive-day rate. The strategy is
+flat most of the time and its expected value rests on a handful of outsized
+intraday moves — exactly the profile that decays hardest live. Costs exclude
+slippage, queue position, partial fills, borrow cost and short availability,
+and there is no walk-forward validation. The paper's own sample spans two
+crashes; this one does not.
+
+### Lessons
+
+1. **Check your feed before you trust your negative result.** The most
+   interesting finding of this experiment was a data-quality artefact, not the
+   strategy. Session-completeness is now a standard check
+   (`check_noise_band_data_quality.py`).
+2. **Read the authors' code, not just their paper.** The notebook's defaults
+   differ from the prose, and the defaults are what produced the published
+   numbers.
+3. **A Sharpe you cannot reproduce is a warning sign.** Our unlevered Sharpe
+   (1.34) beat the paper's quoted base case (0.61) on a *shorter* sample — that
+   should have prompted suspicion before it prompted celebration.
+
 ## Merger Arbitrage — In Progress
 
 Building a merger arbitrage strategy using SEC EDGAR 8-K filings and Loughran-McDonald sentiment analysis.
