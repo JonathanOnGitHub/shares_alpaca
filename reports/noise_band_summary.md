@@ -22,7 +22,7 @@ as-is.**
 Three things have to be said together:
 
 1. Against the correct control it looks strong: **+29% excess** over an
-   always-long baseline at Sharpe **1.34 vs 0.30**, with *half* the
+   intraday-long baseline at Sharpe **1.34 vs 0.30**, with *half* the
    volatility and *less than a third* of the drawdown.
 2. It **flips sign across parameter settings**. The excess is +29% at
    VM 1.0/lookback 14, +27% at VM 0.5/14, and **−18% at VM 2.0/90**. Half the
@@ -49,7 +49,7 @@ A breach means the market has moved further than it "normally" has by that
 time of day — a demand/supply imbalance rather than noise.
 
 - **Entry:** long above UB, short below LB, **plus VWAP confirmation**.
-- **Decisions:** semi-hourly marks only (bars closing 10:00, 10:30, …).
+- **Decisions:** semi-hourly marks only (the 09:59 bar, traded from 10:00).
 - **Exit:** opposite-band cross, or the close. Exposure is flat at 16:00.
 - **Costs:** $0.0035/share commission, $0.35/order minimum. The paper models
   no slippage and neither do we by default.
@@ -64,7 +64,7 @@ The authors' reference notebook defaults to `sizing_type = "vol_target"`,
 `band_mult = 1`, `target_vol = 0.02`, `max_leverage = 4`, `trade_freq = 30`.
 These are the defaults in `NoiseBandConfig`.
 
-| | Strategy | Always-long | SPY B&H |
+| | Strategy | Intraday-long | SPY B&H |
 |---|---:|---:|---:|
 | Total return | **+117.4%** | −10.6% | +52.6% |
 | Annualised | **+21.6%** | −2.8% | +11.4% |
@@ -75,12 +75,22 @@ These are the defaults in `NoiseBandConfig`.
 | Total cost | $5,154 | | |
 
 The strategy beat SPY buy & hold on every risk measure while taking less
-volatility than SPY itself. Against the always-long baseline the excess is
+volatility than SPY itself. Against the intraday-long baseline the excess is
 **+128.0%**.
+
+**What "intraday-long" means, and why it is not buy-and-hold:** the control
+is long from the open to the close and flat overnight, exactly like the
+strategy. That is the right matched control — it shares the strategy's
+exposure schedule, so the difference isolates the signal. But it misses the
+overnight gap, and for SPY over 2020-2025 the gap was **+52% of the total
+return** (intraday-only +38.7%, overnight-only +51.9%). Anyone comparing
+against this baseline should not read "+128% excess" as "beat buy-and-hold by
+128%"; the honest comparison is the SPY B&H column, where the strategy still
+comes out ahead on every risk measure but not on the size of the gap.
 
 ## `full_notional` sizing (no leverage)
 
-| | Strategy | Always-long | SPY B&H |
+| | Strategy | Intraday-long | SPY B&H |
 |---|---:|---:|---:|
 | Total return | +42.4% | +13.4% | +52.6% |
 | Annualised | +9.3% | +3.2% | +11.4% |
@@ -97,7 +107,7 @@ feed, with a shorter sample.
 
 ## Parameter sweep — the edge does not survive every setting
 
-`full_notional`, excess over always-long by year:
+`full_notional`, excess over the intraday-long baseline by year:
 
 | VM | lookback | total | excess | Sharpe | trades | yearly excess |
 |---:|---:|---:|---:|---:|---:|---|
@@ -197,6 +207,91 @@ zero because the strategy is flat most of the time — it trades a few times a
 month. That is a low-hit-rate, tail-driven profile: the expected value is
 positive, but the path depends on a handful of outsized intraday moves, which
 is exactly the profile that decays hardest in live execution.
+
+---
+
+## What £10,000 in January 2020 would have been worth
+
+`scripts/gbp_path_noise_band.py` runs the strategy in USD and converts the
+equity curve to GBP at each day's actual GBP/USD rate, so the answer is in the
+currency the money was actually in. `full_notional`, VM 1.0, lookback 14.
+
+| year | start GBP | end GBP | P&L | return | intraday-long | excess |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2020 | 10,000 | 10,313 | +313 | +3.1% | +4.0% | −0.9% |
+| 2021 | 10,313 | 11,159 | +846 | +8.2% | −0.3% | +8.5% |
+| 2022 | 11,159 | 11,396 | +237 | +2.1% | −19.5% | **+21.6%** |
+| 2023 | 11,396 | 13,361 | +1,965 | +17.2% | +13.4% | +3.9% |
+| 2024 | 13,361 | 13,788 | +428 | +3.2% | −1.6% | +4.8% |
+| 2025 | 13,788 | 14,842 | +1,054 | +7.6% | +11.2% | −3.5% |
+
+| | GBP | return |
+|---|---:|---:|
+| **Strategy** (`full_notional`) | **14,842** | **+48.4%** |
+| Strategy (`vol_target`, up to 4× levered) | 36,731 | +267.3% |
+| SPY buy-and-hold | 21,399 | **+114.0%** |
+| Intraday-long baseline | 10,356 | +3.6% |
+
+GBP/USD went 1.3263 → 1.3467 over the period, so the currency cost the
+investor about 1.5%.
+
+**The honest headline: SPY buy-and-hold beat the unlevered strategy by a wide
+margin over 2020–2025.** £10,000 became £21,399 passive versus £14,842 in the
+strategy — and the passive route needed no trading, no signal, and no
+execution risk.
+
+The strategy's edge shows up where the market was ugly: **2022, the bear
+year, it returned +2.1% while buy-and-hold lost 19.5%** — a +21.6% excess and
+the only year where the strategy's risk-management behaviour clearly paid.
+In 2020 and 2025 it underperformed the intraday-long control, and in 2023 and
+2024 it lagged SPY buy-and-hold despite being in the market the whole time,
+because it sat out rallies overnight.
+
+This is the same shape as the rest of the study: a positive, sometimes large
+excess over a matched control, in a period whose bull market rewards simply
+holding. The 2020–2025 sample is a poor test of the strategy and a good test
+of the alternative.
+
+### The £10,000 account is too small for this strategy
+
+At this size the **$0.35/order minimum commission is a 12.2% drag** — $921 of
+costs on $7,540 of starting USD capital. The same backtest at other sizes:
+
+| starting capital | strategy return | intraday-long | cost as % of capital |
+|---:|---:|---:|---:|
+| $7,540 | +46.2% | +2.0% | **12.2%** |
+| $25,000 | +56.6% | +11.5% | 3.7% |
+| $100,000 | +57.9% | +13.5% | 2.7% |
+| $1,000,000 | +57.9% | +13.6% | 2.7% |
+
+The strategy's edge is roughly the same; the *cost* of getting it is not. At
+$100k the strategy earns +57.9% and the control +13.5%; at $7.5k it earns
++46.2% and the control +2.0%. The £10k account loses most of the edge to
+commissions, and the control loses more, so the *excess* looks better at
+small size purely because the control is penalised harder. That is an
+artefact of the minimum-commission model, not evidence that £10k is the sweet
+spot.
+
+### The `vol_target` result is real, but it is not a free lunch
+
+The levered variant ends at £36,731 (+267.3%), ahead of buy-and-hold. That
+number survives scrutiny: the strategy's **gross** is +$279,695 against the
+levered baseline's **−$36,006**, so the excess is +308.8% and the *strategy's
+own gross* is +279.7% of capital — it is not an artefact of the comparison.
+
+But the mechanism is leverage applied to a low-vol regime, and it cuts both
+ways. The levered baseline loses money in five of six years (−$15.7k in 2020,
+−$16.2k in 2022) because the leverage is set from *trailing* volatility: it
+ramps to the 4× cap in quiet periods and then meets a reversal. Its worst
+single day is −$12,840 (2020-09-03), on a day the unlevered baseline lost
+0.3%. The strategy survives this because it is *short* into those reversals —
+that is the actual edge. A £10k account running 4× leverage on a $7,540
+notional would need $30k of buying power, and the drawdown on the levered
+path is far worse than the unlevered one.
+
+The unlevered path is the one to trust for the "what would I have made"
+question; the levered path is what the paper's headline is built on, and it
+comes with the tail risk described in the concentration section above.
 
 ---
 

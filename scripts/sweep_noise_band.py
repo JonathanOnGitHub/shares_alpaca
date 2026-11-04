@@ -3,7 +3,10 @@
 Parameter sweep for the Noise Area strategy.
 
 Sweeps the Volatility Multiplier and lookback on cached SPY 1-minute bars and
-reports each against the unconditional always-long baseline and SPY buy & hold.
+reports each against the unconditional intraday-long baseline and SPY buy & hold.
+
+The baseline is long from the first mark to the close and flat overnight, so
+it is NOT buy-and-hold -- see src/trading/noise_band.py.
 
 The point is not to find the best parameter -- it is to see whether the edge
 survives a range of parameters.  A strategy that only works at one setting is

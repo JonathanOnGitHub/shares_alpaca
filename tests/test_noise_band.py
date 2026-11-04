@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.trading.noise_band import (  # noqa: E402
     NoiseBandConfig, add_noise_band_features, generate_signals, position_size,
+    run_backtest,
 )
 
 SESSION_MINUTES = 390  # 09:30 -> 16:00 ET
@@ -194,3 +195,72 @@ def test_baseline_is_identically_sized_to_the_strategy():
     cfg = NoiseBandConfig(lookback_days=3, sizing="vol_target")
     out = add_noise_band_features(df, cfg)
     assert len(out["daily_vol"].dropna()) > 0, "daily vol should be populated"
+
+
+def test_baseline_is_flat_overnight_and_so_is_not_buy_and_hold():
+    """The baseline is long intraday only, flat at each close.
+
+    This is a matched control (it shares the strategy's exposure schedule),
+    NOT buy-and-hold: it misses the overnight gap. A test that pins this
+    stops the two being silently conflated, which would flatter the
+    strategy's excess return.
+    """
+    days = [f"2024-03-{i:02d}" for i in range(1, 21)]
+    # every day gaps up 5% at the open and is flat intraday
+    df = make_bars(days, _flat_days(20, 0.0))
+    df["open"] = 100.0
+    df["high"] = 100.0
+    df["low"] = 100.0
+    df["close"] = 100.0
+    # simulate a gap: each day's open is 5% above the previous close
+    for i in range(1, len(days)):
+        m = df.index.normalize() == pd.Timestamp(days[i])
+        df.loc[m, ["open", "high", "low", "close"]] *= (1.05 ** i)
+
+    cfg = NoiseBandConfig(lookback_days=3, sizing="full_notional")
+    out = add_noise_band_features(df, cfg)
+    base = run_backtest(out, cfg, initial_capital=100_000.0, baseline=True)
+
+    # A pure overnight-gap market with no intraday move: an intraday-long
+    # baseline earns nothing, because it is flat every close. It still pays
+    # the daily round-trip commission, so it lands slightly negative.
+    assert base["total_return"] == pytest.approx(0.0, abs=0.005)
+    assert base["total_return"] < 0, "the round-trip cost should show up"
+
+    # Buy-and-hold over the same period would have compounded the gaps.
+    closes = out.groupby("day")["close"].last()
+    bh = closes.iloc[-1] / closes.iloc[0]
+    assert bh > 1.5, "buy-and-hold should have compounded the gaps"
+
+
+def test_minimum_commission_makes_account_size_part_of_the_strategy():
+    """The $0.35/order minimum binds on a small account and not on a large one.
+
+    Commission is $0.0035/share but never less than $0.35/order, so on a
+    small book the floor is what you actually pay and the cost is a fixed
+    dollar amount against a small capital base. That makes account size part
+    of the strategy's economics, so "what would I have made" is not a
+    property of the strategy alone.
+    """
+    days = [f"2024-04-{i:02d}" for i in range(1, 21)]
+    df = make_bars(days, _flat_days(20, 0.005))
+    cfg = NoiseBandConfig(lookback_days=3, sizing="full_notional")
+    out = add_noise_band_features(df, cfg)
+
+    small = run_backtest(out, cfg, initial_capital=7_540.0, baseline=True)
+    big = run_backtest(out, cfg, initial_capital=100_000.0, baseline=True)
+
+    # 75 shares at $100 -> $0.26 of per-share commission, so the $0.35 floor binds
+    assert small["trades"]["cost"].sum() / small["n_trades"] == pytest.approx(0.35)
+    # 1000 shares at $100 -> $3.50 per share, comfortably above the floor
+    # (share count drifts as equity compounds, so assert the regime, not the value)
+    assert big["trades"]["cost"].sum() / big["n_trades"] > 3.0
+
+    # so the small account pays more relative to its capital, and pays it as a
+    # fixed dollar sum while the large one pays a share of a growing book
+    cost_small = small["trades"]["cost"].sum() / 7_540.0
+    cost_big = big["trades"]["cost"].sum() / 100_000.0
+    assert cost_small > cost_big
+
+    # the trade count is identical; only the cost share differs
+    assert small["n_trades"] == big["n_trades"] > 0

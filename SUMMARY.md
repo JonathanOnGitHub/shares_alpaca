@@ -827,6 +827,7 @@ to move both to 20d and recalibrate the gates, not to move the bot to 5d.
 Scripts: [`src/trading/noise_band.py`](src/trading/noise_band.py),
 [`scripts/backtest_noise_band.py`](scripts/backtest_noise_band.py),
 [`scripts/sweep_noise_band.py`](scripts/sweep_noise_band.py),
+[`scripts/gbp_path_noise_band.py`](scripts/gbp_path_noise_band.py),
 [`scripts/check_noise_band_data_quality.py`](scripts/check_noise_band_data_quality.py).
 Full write-up: [`reports/noise_band_summary.md`](reports/noise_band_summary.md).
 
@@ -850,12 +851,20 @@ Method: Alpaca 1-minute bars, **SIP** feed (complete sessions), SPY,
 2022-01-03 → 2025-12-31 — 990 sessions, 390,761 bars, every session a full 390
 bars. Entry at the semi-hourly mark, VWAP-confirmed, exit on the opposite band
 or at the close. Costs $0.0035/share + $0.35/order minimum, no slippage.
-Control is the **always-long baseline**, sized identically, so only the excess
+Control is the **intraday-long baseline**, sized identically, so only the excess
 means anything.
+
+> **Naming correction.** The control was previously labelled "always-long",
+> which is misleading: it is long from the 09:59 mark to the close and **flat
+> overnight**, because it shares the strategy's exposure schedule. It is
+> therefore *not* buy-and-hold — it misses the overnight gap, which was **+52%
+> of SPY's 2020–2025 return** (intraday-only +38.7%, overnight-only +51.9%).
+> The excess numbers are unchanged and internally valid, but "excess over
+> always-long" must never be read as "beat buy-and-hold".
 
 ### Results
 
-| | vol_target | always-long | SPY B&H |
+| | vol_target | intraday-long | SPY B&H |
 |---|---|---|---|
 | total return | **+117.4%** | −10.6% | +52.6% |
 | volatility | +14.7% | +27.9% | +17.8% |
@@ -865,6 +874,43 @@ means anything.
 Unlevered (`full_notional`): **+42.4%** vs +13.4% baseline, Sharpe **1.34** vs
 0.30, drawdown −6.8% vs −13.8% — **+29.0% excess**. Both beat SPY buy & hold on
 drawdown while taking less volatility than SPY itself.
+
+### What £10,000 in January 2020 would have been worth
+
+`scripts/gbp_path_noise_band.py` runs the strategy in USD and converts the
+equity curve to GBP at each day's actual rate.
+
+| year | start GBP | end GBP | return | intraday-long | excess |
+|---|---|---|---|---|---|
+| 2020 | 10,000 | 10,313 | +3.1% | +4.0% | −0.9% |
+| 2021 | 10,313 | 11,159 | +8.2% | −0.3% | +8.5% |
+| 2022 | 11,159 | 11,396 | +2.1% | −19.5% | **+21.6%** |
+| 2023 | 11,396 | 13,361 | +17.2% | +13.4% | +3.9% |
+| 2024 | 13,361 | 13,788 | +3.2% | −1.6% | +4.8% |
+| 2025 | 13,788 | 14,842 | +7.6% | +11.2% | −3.5% |
+
+| | GBP | return |
+|---|---|---|
+| **Strategy** (`full_notional`) | **14,842** | **+48.4%** |
+| Strategy (`vol_target`) | 36,731 | +267.3% |
+| SPY buy-and-hold | 21,399 | **+114.0%** |
+| Intraday-long baseline | 10,356 | +3.6% |
+
+**SPY buy-and-hold beat the unlevered strategy by a wide margin.** The
+strategy's edge is visible in 2022 (the bear year: +2.1% vs −19.5%) and
+nowhere else in this sample.
+
+**The £10k account is too small for this strategy.** The $0.35/order minimum
+commission is a **12.2% drag** at $7,540 of starting capital, versus 2.7% at
+$100k. At small size the *excess* looks better only because the control is
+penalised harder — an artefact of the cost model, not an edge.
+
+**The `vol_target` result is real but levered.** Its gross is +$279,695
+against the levered baseline's −$36,006, so it is not a comparison artefact.
+But the leverage comes from trailing volatility, so it ramps to the 4× cap in
+quiet periods and meets reversals — the levered baseline loses money in five
+of six years, with a −$12,840 worst day. The strategy survives those because
+it is *short* into them; that is the actual edge.
 
 ### The two findings that matter
 
@@ -882,9 +928,10 @@ on both feeds** — that one is real. *A 1-minute band is only meaningful on
 whole sessions; incomplete sessions manufacture both fake signals and fake
 conclusions.*
 
-**2. The edge does not survive every parameter.** Excess over always-long
-ranges **+29.0% to −17.7%** across the VM × lookback surface. Two settings are
-positive in all four years; **six of the eight are negative in 2025**.
+**2. The edge does not survive every parameter.** Excess over the intraday-long
+baseline ranges **+29.0% to −17.7%** across the VM × lookback surface. Two
+settings are positive in all four years; **six of the eight are negative in
+2025**.
 
 | VM | lookback | excess | 2022 | 2023 | 2024 | 2025 |
 |---|---|---|---|---|---|---|
@@ -893,7 +940,7 @@ positive in all four years; **six of the eight are negative in 2025**.
 | 1.5 | 14 | +17.5% | +17% | −3% | +4% | −2% |
 | 2.0 | 14 | −5.5% | +2% | −9% | +2% | −3% |
 | 0.5 | 90 | −6.8% | −7% | −1% | +4% | −5% |
-| 1.0 | 90 | +22.4% | +7% | +2% | +6% | +5% |
+| 1.0 | 90 | +22.4% | +7% | +2% | +6% | **+5%** |
 | 1.5 | 90 | −2.6% | +6% | −10% | −0% | −1% |
 | 2.0 | 90 | −17.7% | +2% | −11% | −4% | −6% |
 
@@ -920,6 +967,14 @@ crashes; this one does not.
 3. **A Sharpe you cannot reproduce is a warning sign.** Our unlevered Sharpe
    (1.34) beat the paper's quoted base case (0.61) on a *shorter* sample — that
    should have prompted suspicion before it prompted celebration.
+4. **Name your control for what it does.** "Always-long" was wrong — the
+   control was flat overnight and so missed 52% of the market's return. A
+   mislabelled control flatters the strategy and hides the fact that
+   buy-and-hold beat it.
+5. **Minimum commissions make account size part of the strategy.** The same
+   edge costs 12.2% of capital at $7.5k and 2.7% at $100k, and the *excess*
+   moves for the wrong reason. Any "what would I have made" question needs the
+   capital size stated.
 
 ## Merger Arbitrage — In Progress
 

@@ -132,7 +132,7 @@ def max_dd(equity: pd.Series) -> float:
 
 
 def yearly_excess(res: dict, base_res: dict, initial_capital: float) -> dict:
-    """Excess over the always-long baseline, by calendar year."""
+    """Excess over the intraday-long baseline, by calendar year."""
     t = res["trades"]
     if not len(t):
         return {}
@@ -208,7 +208,7 @@ def main() -> int:
     s.update(stats(daily, "strat"))
     s.update(stats(base_daily, "base"))
     s.update(stats(spy_daily, "spy"))
-    print("\n                     strategy     always-long   SPY B&H")
+    print("\n                     strategy   intraday-long   SPY B&H")
     print(f"  total return   {s['strat_total']:+12.1%}  {s['base_total']:+12.1%}  {s['spy_total']:+12.1%}")
     print(f"  annualised     {s['strat_ann']:+12.1%}  {s['base_ann']:+12.1%}  {s['spy_ann']:+12.1%}")
     print(f"  volatility     {s['strat_vol']:+12.1%}  {s['base_vol']:+12.1%}  {s['spy_vol']:+12.1%}")
@@ -216,7 +216,7 @@ def main() -> int:
     print(f"  worst day      {s['strat_worst']:+12.1%}  {s['base_worst']:+12.1%}  {s['spy_worst']:+12.1%}")
     print(f"  max drawdown   {max_dd(eq):+12.1%}  {max_dd(base_res['equity_curve']):+12.1%}"
           f"  {max_dd(spy_curve):+12.1%}")
-    print(f"\n  EXCESS over always-long: {s['strat_total']-s['base_total']:+.1%}")
+    print(f"\n  EXCESS over intraday-long: {s['strat_total']-s['base_total']:+.1%}")
     if len(trades):
         print(f"  hit rate (days>0): {100*(daily>0).mean():.1f}%")
         print(f"  mean gross/day:  ${trades['gross'].mean():,.1f}")
@@ -232,7 +232,7 @@ def main() -> int:
     # flipped sign across years; a strategy that only works in some regimes is
     # not deployable.
     if len(trades):
-        print("\n  by year:   strategy      always-long      excess")
+        print("\n  by year:   strategy    intraday-long      excess")
         ye = yearly_excess(res, base_res, initial_capital)
         t = trades.set_index("day")
         for yr, g in t.groupby(pd.to_datetime(t.index).year):

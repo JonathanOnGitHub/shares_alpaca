@@ -17,9 +17,9 @@ overnight gap widens the band.  A breach means the market has moved further
 than it "normally" has by that time of day -- an imbalance in demand/supply
 rather than noise.
 
-Exposure is set on semi-hourly marks (the bar closing at 10:00, 10:30, ...),
-long above the band and short below it, with VWAP confirmation, and unwound
-at the close.
+Exposure is set on semi-hourly marks (the 09:59 bar, traded from the next
+bar), long above the band and short below it, with VWAP confirmation, and
+unwound at the close.
 
 This is a port of the authors' own reference notebook (linked from the
 paper's Q&A page).  The sigma construction, the minute-of-day grouping, the
@@ -109,8 +109,8 @@ def add_noise_band_features(df: pd.DataFrame,
 
     # --- minute of day. The +1 matches the authors' reference implementation:
     # the bar labelled 09:30 is "minute 1" of the session, so the semi-hourly
-    # marks land on the bars closing at 10:00, 10:30, ... which is where the
-    # paper says decisions are taken.
+    # marks land on the 09:59 bar and the position is held from 10:00 -- one
+    # bar later, which is the deliberate anti-lookahead shift.
     out["minute_of_day"] = _minute_of_day(out.index)
     out["min_from_open"] = out["minute_of_day"] - MARKET_OPEN_MIN + 1
 
@@ -187,6 +187,12 @@ def run_backtest(out: pd.DataFrame,
     positive drift, so the strategy's raw return means nothing on its own --
     only the excess over this baseline is evidence of edge.  The baseline is
     sized identically, so the comparison isolates the signal.
+
+    Note the baseline is long *intraday only* (it is flat at each close,
+    exactly like the strategy), so it is NOT buy-and-hold: it misses the
+    overnight gap, which for SPY was +52% of the 2020-2025 return.  It is
+    the right control because it shares the strategy's exposure schedule;
+    the report also quotes plain SPY buy-and-hold separately.
     """
     signals = generate_signals(out, cfg)
     out = out.assign(signal=signals)
@@ -236,6 +242,11 @@ def run_backtest(out: pd.DataFrame,
         n_trades = int(np.sum(np.abs(np.diff(np.append(exposure, 0.0)))))
         shares = position_size(equity, open_px, d["daily_vol"].iloc[0], cfg)
 
+        # Per-bar price changes. Exposure is shifted by one bar (the signal
+        # is read at the close of a mark bar and traded from the next bar),
+        # so the P&L is close-to-close from bar 1 onwards. The move from the
+        # session open to the first bar is NOT captured -- the same as the
+        # authors' reference notebook, which uses a plain close.diff().
         change = d["close"].diff()
         gross = float(np.nansum(exposure * change.fillna(0.0))) * shares
         cost = n_trades * max(cfg.min_commission, cfg.commission * shares) \

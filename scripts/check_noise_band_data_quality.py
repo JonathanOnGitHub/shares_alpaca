@@ -60,7 +60,7 @@ def main() -> int:
     daily = res["equity_curve"].pct_change().dropna()
     s = stats(daily, "s")
     bs = stats(base["equity_curve"].pct_change().dropna(), "b")
-    print(f"{'':22}{'strategy':>12}{'always-long':>14}")
+    print(f"{'':22}{'strategy':>12}{'intraday-long':>14}")
     print(f"  total return      {s['s_total']:+12.1%}{bs['b_total']:+14.1%}")
     print(f"  Sharpe            {s['s_sharpe']:+12.2f}{bs['b_sharpe']:+14.2f}")
     print(f"  excess            {s['s_total']-bs['b_total']:+12.1%}")
