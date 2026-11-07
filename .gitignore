@@ -44,3 +44,12 @@ signals_engulfing.json
 # The trade log IS the audit trail, but it is machine-written and
 # rewritten in place; it is tracked separately from the source.
 paper_trades.csv
+paper_trades_engulfing.csv
+
+# ── Advisory lock files ────────────────────────────────────────────────────
+# Runtime state: the PID inside is written by the lock holder. The lock
+# file itself is harmless to commit, but it must never be committed —
+# a checked-in lock file with a stale PID is misleading.
+.fvg_scanner.lock
+.fvg_executor.lock
+.engulfing_executor.lock

@@ -2,7 +2,37 @@
 # engulfing_daily_wrapper.sh — run inside a cron no_agent job
 # Generates engulfing bull_overnight_tl10 signals after market close,
 # then launches the executor daemon to enter positions at next open.
-set -euo pipefail
+#
+# ── WHY THIS WRAPPER NOW DELEGATES TO SYSTEMD ─────────────────────────────
+# This wrapper used to start the daemon itself with `setsid`. Two
+# problems came out of that:
+#
+#   1. DUPLICATE DAEMONS. The PID file was OVERWRRITTEN on every run,
+#      so the daemon started by yesterday's run became invisible to
+#      today's "is it already running?" check, and a second daemon
+#      started alongside it. On 2026-11-07 TWO run_engulfing_paper.py
+#      daemons were running at the same time (PIDs 113311 and 537265).
+#      Each daemon keeps its own _acted_signals set and its own
+#      .positions_engulfing.json, so they can double-enter a setup and
+#      overwrite each other's view of an open position — leaving that
+#      position unmanaged at the broker with no stop and no target.
+#
+#   2. THE CGROUP PROBLEM. setsid detaches a process from its
+#      terminal and session, but NOT from the systemd cgroup it was
+#      launched in, so the daemon stayed inside hermes-gateway.service's
+#      cgroup. When the kernel OOM killer hit the gateway (7.4G peak on
+#      28 and 29 Oct), systemd tore the whole cgroup down with SIGKILL
+#      and the daemon died with it — on both mornings — and never
+#      traded.
+#
+# The systemd unit now owns the daemon: it runs in its own cgroup, and
+# the runner's flock (src/trading/process_lock.py) guarantees that only
+# one daemon per strategy can ever hold the strategy's signals file.
+#
+# If systemd is unavailable (no user session bus), it falls back to the
+# old setsid path — the flock still prevents a duplicate daemon, so the
+# fallback is safe.
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
@@ -13,73 +43,10 @@ PIDFILE="$REPO_DIR/executor_engulfing.pid"
 
 cd "$REPO_DIR"
 
-# ── 0. Retire any daemon left over from a previous session ─────────────────
-# The engulfing strategy is an OVERNIGHT strategy: its daemon is meant to
-# survive the close and hold the position until the next session's exit.
-# That makes it genuinely long-lived, so "is the PID alive" is NOT
-# sufficient to decide whether it is still the daemon we want.
-#
-# A daemon that is alive but wedged is WORSE than no daemon: it holds a
-# position with no stop, and the next run's wrapper sees a live PID,
-# prints "executor already running" and skips the start — so the
-# strategy stops trading while appearing healthy.
-#
-# We therefore treat a daemon as stale when it was started before
-# today's 00:00 host-local time AND the account holds no position that
-# it is managing. A daemon that still owns a live position is left
-# alone; one that does not is killed so the next session starts clean.
-if [ -f "$PIDFILE" ]; then
-    PID="$(cat "$PIDFILE" 2>/dev/null || true)"
-    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-        CMD="$(ps -o args= -p "$PID" 2>/dev/null || true)"
-        case "$CMD" in
-            *run_engulfing_paper.py*)
-                STARTED="$(ps -o lstart= -p "$PID" 2>/dev/null | sed 's/^ *//')"
-                START_EPOCH="$(date -d "$STARTED" +%s 2>/dev/null || echo 0)"
-                TODAY_EPOCH="$(date -d "$(date +%Y-%m-%d) 00:00:00" +%s)"
-                if [ "$START_EPOCH" -lt "$TODAY_EPOCH" ]; then
-                    # The daemon is from an earlier session. Before killing
-                    # it, check whether it still OWNS a live position at
-                    # the broker — an overnight position is meant to be
-                    # held across sessions, and killing its daemon would
-                    # strand it with no stop and no exit.
-                    HAS_POS="$("$VENV_PY" -c "
-import os, sys
-sys.path.insert(0, '$REPO_DIR')
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    from alpaca.trading.client import TradingClient
-    c = TradingClient(os.environ['ALPACA_API_KEY'], os.environ['ALPACA_SECRET_KEY'], paper=True)
-    ps = [p for p in c.get_all_positions() if abs(float(p.qty)) > 0]
-    print(len(ps))
-except Exception:
-    print(0)
-" 2>/dev/null || echo 0)"
-                    if [ "${HAS_POS:-0}" != "0" ]; then
-                        echo "$(date -Iseconds) — engulfing executor PID $PID is old but the account holds $HAS_POS live position(s) — leaving it running" >> "$LOGFILE"
-                    else
-                        echo "$(date -Iseconds) — engulfing executor PID $PID started '$STARTED' (before today), account flat — killing stale daemon" >> "$LOGFILE"
-                        kill "$PID" 2>/dev/null || true
-                        sleep 2
-                        if kill -0 "$PID" 2>/dev/null; then
-                            kill -9 "$PID" 2>/dev/null || true
-                            sleep 1
-                        fi
-                        echo "$(date -Iseconds) — stale engulfing executor PID $PID reaped" >> "$LOGFILE"
-                    fi
-                else
-                    echo "$(date -Iseconds) — engulfing executor PID $PID is from today's session — reusing" >> "$LOGFILE"
-                fi
-                ;;
-            *)
-                echo "$(date -Iseconds) — engulfing PID $PID is not the engulfing daemon ('$CMD') — clearing pidfile, not killing" >> "$LOGFILE"
-                ;;
-        esac
-    else
-        echo "$(date -Iseconds) — engulfing executor PID ${PID:-?} is not running — clearing pidfile" >> "$LOGFILE"
-    fi
-    rm -f "$PIDFILE"
+SYSTEMD_OK=0
+if systemctl --user is-system-running >/dev/null 2>&1 || \
+   systemctl --user list-unit-files >/dev/null 2>&1; then
+    SYSTEMD_OK=1
 fi
 
 # ── 1. Generate signals ───────────────────────────────────────────────────────
@@ -87,7 +54,7 @@ fi
 echo "=== $(date -Iseconds) — engulfing daily run ===" >> "$LOGFILE"
 "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" --signals-only 2>&1 | tee -a "$LOGFILE"
 
-# ── 2. P&L report ───────────────────────────────────────────────────────────
+# ── 2. P&L report ────────────────────────────────────────────────────────────
 "$VENV_PY" -c "
 import sys, os; sys.path.insert(0, '$REPO_DIR')
 from pathlib import Path
@@ -106,15 +73,19 @@ else:
     print('Engulfing: no trades yet (no log file)')
 " 2>&1 | tee -a "$LOGFILE"
 
-# ── 3. Start executor daemon (background) ────────────────────────────────────
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-    echo "$(date -Iseconds) — executor already running (PID $(cat "$PIDFILE"))" >> "$LOGFILE"
+# ── 3. Start the executor daemon ─────────────────────────────────────────────
+if [ "$SYSTEMD_OK" = "1" ]; then
+    # `restart` (not `start`) so a daemon left over from a previous
+    # session — including one wedged on a pending position — is
+    # replaced rather than joined. The engulfing strategy is an
+    # OVERNIGHT strategy, so its daemon is meant to survive the close
+    # and hold the position until the next session's exit.
+    systemctl --user restart shares-alpaca-engulfing-paper.service >> "$LOGFILE" 2>&1
+    systemctl --user show -p MainPID --value shares-alpaca-engulfing-paper.service > "$PIDFILE" 2>/dev/null || true
+    echo "$(date -Iseconds) — engulfing systemd unit restarted (PID $(cat "$PIDFILE" 2>/dev/null))" >> "$LOGFILE"
 else
-    # setsid detaches the daemon into its own session/process group so it
-    # survives the cron runner's exit. Plain `nohup ... &` is not enough when
-    # the runner captures stdout via a pipe — the child keeps the pipe open
-    # and the parent blocks until timeout.
-    setsid "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" >> "$LOGFILE" 2>&1 < /dev/null &
+    setsid "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" --executor-only \
+        >> "$LOGFILE" 2>&1 < /dev/null &
     echo $! > "$PIDFILE"
-    echo "$(date -Iseconds) — executor started PID $!" >> "$LOGFILE"
+    echo "$(date -Iseconds) — engulfing fallback daemon started PID $!" >> "$LOGFILE"
 fi

@@ -18,6 +18,20 @@ Usage:
     python scripts/run_fvg_paper.py --signals-only    # signals only, no executor
     python scripts/run_fvg_paper.py --once            # single scan, then exit
     python scripts/run_fvg_paper.py --poll            # scan continuously during the session
+    python scripts/run_fvg_paper.py --executor-only   # executor daemon only, no signal generation
+
+--executor-only exists because the systemd unit
+shares-alpaca-fvg-executor.service passes it. The unit previously
+crash-looped with status=2/INVALIDARGUMENT (~12,400 restarts) because
+argparse rejected the unknown flag and exited — every restart re-read
+the same flag, so the daemon never ran and the positions it should
+have managed were left orphaned at the broker.
+
+The scanner and the executor are deliberately separate units: the
+scanner owns signal generation (it rewrites signals.json every five
+minutes), the executor only consumes that file. Regenerating signals
+from the executor would race the scanner for the same file and pull
+the whole yfinance universe into the executor's memory.
 """
 import argparse
 import json
@@ -34,6 +48,19 @@ import pandas as pd  # noqa: E402
 
 from src.trading.intraday_fvg_live import generate_signals, write_signals, OUT as SIGNALS_OUT  # noqa: E402
 from src.trading.executor_live import PaperExecutor  # noqa: E402
+from src.trading.process_lock import acquire_lock, lock_holder_pid  # noqa: E402
+
+# Advisory flock files. A PID file cannot prevent two daemons for the
+# same strategy: the wrapper overwrites the PID file on every run, so a
+# daemon from an earlier run becomes invisible to the next run's
+# "already running?" check. Two live daemons for one strategy is not
+# merely untidy — each keeps its own `_acted_signals` set and its own
+# position file, so they can enter the same setup twice and erase each
+# other's view of an open position, leaving it unmanaged at the broker
+# with no stop and no target. An flock is released by the kernel even
+# when the holder is SIGKILLed, so there is no stale lock to clean up.
+SCANNER_LOCK = ROOT / ".fvg_scanner.lock"
+EXECUTOR_LOCK = ROOT / ".fvg_executor.lock"
 
 
 def run_signals(args):
@@ -55,7 +82,7 @@ def run_signals(args):
     return signals
 
 
-def run_executor(args, signals):
+def run_executor(args, signals=None):
     """Start the PaperExecutor daemon."""
     print("[run_fvg_paper] Starting PaperExecutor (intraday FVG)...")
     # The executor's logger must be configured HERE, not only in the
@@ -117,9 +144,32 @@ def main():
     parser.add_argument("--poll-seconds", type=int, default=300, help="Seconds between rescans (default 300)")
     parser.add_argument("--until-et", type=int, default=840, help="Stop scanning after this minute-of-day ET (default 840 = 14:00)")
     parser.add_argument("--days", type=int, default=5, help="Days of 5-min history to fetch (default 5)")
+    parser.add_argument("--executor-only", action="store_true",
+                        help="Run ONLY the executor daemon; do not generate signals. "
+                             "The scanner unit owns signal generation.")
     args = parser.parse_args()
 
+    if args.executor_only:
+        # The signals file is written by the scanner (or by the daily
+        # wrapper's one-off scan). The executor just polls it.
+        lock = acquire_lock(EXECUTOR_LOCK)
+        if lock is None:
+            other = lock_holder_pid(EXECUTOR_LOCK)
+            print(f"[run_fvg_paper] Another FVG executor already holds "
+                  f"{EXECUTOR_LOCK} (pid {other}) — refusing to start a "
+                  f"second daemon for the same strategy.")
+            return
+        run_executor(args)
+        return
+
     if args.poll:
+        lock = acquire_lock(SCANNER_LOCK)
+        if lock is None:
+            other = lock_holder_pid(SCANNER_LOCK)
+            print(f"[run_fvg_paper] Another FVG scanner already holds "
+                  f"{SCANNER_LOCK} (pid {other}) — refusing to start a "
+                  f"second scanner.")
+            return
         poll_loop(args)
         return
 
