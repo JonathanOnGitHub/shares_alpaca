@@ -72,13 +72,34 @@ class BrokerBackend:
     def submit_limit_order(self, symbol: str, qty: float, limit_price: float, side: Literal["buy", "sell"]) -> str:
         raise NotImplementedError
 
+    def submit_stop_order(self, symbol: str, qty: float, stop_price: float,
+                          side: Literal["buy", "sell"]) -> str:
+        """Place a broker-side protective stop order.
+
+        The stop lives AT THE BROKER, so it still protects the position
+        if this daemon dies, is OOM-killed or is killed by systemd. The
+        Python polling loop is only a convenience; it is not the
+        primary risk control.
+
+        Must be implemented by backends that support it. Returns the
+        order id.
+        """
+        raise NotImplementedError
+
     def cancel_order(self, order_id: str) -> None:
         raise NotImplementedError
 
     def get_positions(self) -> dict[str, float]:
         raise NotImplementedError
 
-    def close_position(self, symbol: str, qty: Optional[float] = None) -> None:
+    def close_position(self, symbol: str, qty: Optional[float] = None) -> Optional[str]:
+        """Close `qty` shares of `symbol`.
+
+        Returns the id of the closing order when one was submitted, so
+        the caller can look up the ACTUAL fill price rather than
+        guessing it from a quote. Returns None when nothing was
+        submitted (no position held, or the backend cannot report it).
+        """
         raise NotImplementedError
 
     def get_cash(self) -> float:
@@ -124,6 +145,36 @@ class AlpacaBackend(BrokerBackend):
         order = self.client.submit_order(req)
         return str(order.id)
 
+    def submit_stop_order(self, symbol: str, qty: float, stop_price: float,
+                          side: Literal["buy", "sell"]) -> str:
+        """Place a broker-side protective stop order.
+
+        This is the PRIMARY risk control for an overnight position. The
+        Python stop/target polling loop only runs while the daemon is
+        alive; a stop that rests at the broker keeps working when the
+        daemon is OOM-killed, killed by systemd, or crashes.
+
+        GTC is used rather than DAY: an overnight position must keep its
+        stop across sessions, and a DAY order would expire at the close
+        and leave the position unprotected overnight.
+        """
+        from alpaca.trading.requests import StopOrderRequest
+        from alpaca.trading.enums import OrderType
+
+        qty = abs(float(qty))
+        if qty < 1e-9:
+            raise ValueError("stop order quantity must be > 0")
+        req = StopOrderRequest(
+            symbol=symbol,
+            qty=qty,
+            stop_price=round(float(stop_price), 2),
+            side=self._OrderSide.BUY if side == "buy" else self._OrderSide.SELL,
+            type=OrderType.STOP,
+            time_in_force=self._TimeInForce.GTC,
+        )
+        order = self.client.submit_order(req)
+        return str(order.id)
+
     def cancel_order(self, order_id: str) -> None:
         self.client.cancel_order_by_id(order_id)
 
@@ -148,24 +199,30 @@ class AlpacaBackend(BrokerBackend):
             return None
         return None
 
-    def close_position(self, symbol: str, qty: Optional[float] = None) -> None:
+    def close_position(self, symbol: str, qty: Optional[float] = None) -> Optional[str]:
         """Close `symbol`, optionally only `qty` shares.
 
         The Alpaca paper account is shared with other projects, so
         closing the WHOLE broker position for a symbol could flatten a
         position that belongs to a different strategy. When the caller
         knows how much it actually holds, close exactly that much.
+
+        Returns the id of the closing order so the caller can read the
+        ACTUAL fill price back from the broker. The old implementation
+        returned nothing, so the ledger had to guess the exit price from
+        a quote — which is how the 2026-11-04 force-close booked a
+        fictitious +$3.31 profit.
         """
         if qty is None:
-            self.client.close_position(symbol)
-            return
+            order = self.client.close_position(symbol)
+            return str(order.id) if order is not None else None
         qty = abs(float(qty))
         if qty < 1e-9:
-            return
+            return None
         pos = {p.symbol: float(p.qty) for p in self.client.get_all_positions()}
         held = pos.get(symbol, 0.0)
         if held == 0:
-            return
+            return None
         # Never close more than is actually held.
         qty = min(qty, abs(held))
         side = self._OrderSide.SELL if held > 0 else self._OrderSide.BUY
@@ -173,7 +230,8 @@ class AlpacaBackend(BrokerBackend):
             symbol=symbol, qty=qty, side=side,
             time_in_force=self._TimeInForce.DAY,
         )
-        self.client.submit_order(req)
+        order = self.client.submit_order(req)
+        return str(order.id)
 
     def get_cash(self) -> float:
         return float(self.client.get_account().cash)
@@ -290,6 +348,14 @@ class ActivePosition:
     close_mode:   Literal["intraday", "overnight"] = "intraday"
     close_deadline_ts: Optional[pd.Timestamp] = None  # close by this time
     entry_filled_price: Optional[float] = None  # actual fill price for market orders
+    # Broker-side protective stop. This is the PRIMARY risk control: it
+    # keeps working when the daemon dies, so a crashed daemon cannot
+    # leave an overnight position naked.
+    stop_order_id: Optional[str] = None
+    stop_order_qty: Optional[float] = None
+    # Client order id used to find/replace the protective stop after a
+    # partial fill (the stop qty must track the position size).
+    stop_client_order_id: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -363,11 +429,50 @@ class PaperExecutor:
         # out now (recording it in the trade log) rather than leaving an
         # unbounded position that no session is watching.
         self._reconcile_stale_positions()
+        # Re-arm the broker-side protective stop for every restored
+        # position. A restart can lose the stop (it was cancelled, or it
+        # was never placed because the daemon died between the fill and
+        # the stop submission), and a position with no stop is exactly
+        # the failure this whole mechanism exists to prevent.
+        self._rearm_protective_stops()
 
         logger.info(
             "[%s/%s] PaperExecutor initialised | broker=%s | signals=%s",
             market, broker, broker, signals_file,
         )
+
+    def _rearm_protective_stops(self):
+        """Ensure every restored open position has a live broker stop.
+
+        Called at start-up. For each entered position it checks whether
+        the recorded stop order is still working at the broker and, if
+        not, places a fresh one.
+        """
+        for sym, pos in list(self.positions.items()):
+            if pos.status != "entered":
+                continue
+            try:
+                stop_id = getattr(pos, "stop_order_id", None)
+                if stop_id:
+                    o = self._get_order(stop_id)
+                    status = self._order_status(o) if o is not None else "unknown"
+                    if status in ("new", "partially_filled", "pending_new", "accepted"):
+                        logger.info(
+                            "[%s/%s] %s: protective stop %s still working",
+                            self.market, self.strategy, sym, stop_id)
+                        continue
+                    logger.info(
+                        "[%s/%s] %s: protective stop %s is %s — re-arming",
+                        self.market, self.strategy, sym, stop_id, status)
+                else:
+                    logger.info(
+                        "[%s/%s] %s: no protective stop on record — re-arming",
+                        self.market, self.strategy, sym)
+                self._place_protective_stop(sym, pos)
+            except Exception as e:
+                logger.error(
+                    "[%s/%s] Could not re-arm protective stop for %s: %s",
+                    self.market, self.strategy, sym, e)
 
     def _init_alpaca(self):
         import os
@@ -393,6 +498,12 @@ class PaperExecutor:
         self._stop.clear()
         logger.info("[%s] Executor running | capital=$%.2f", self.market, self.capital)
 
+        # An OVERNIGHT strategy holds its position across the daemon's
+        # restart, so the shutdown path must NOT flatten it. The
+        # intraday strategy is flat by the close, so flattening is
+        # correct (and required) there.
+        flatten_on_exit = (self.close_mode != "overnight")
+
         while not self._stop.is_set():
             try:
                 self._bar_count += 1
@@ -412,7 +523,7 @@ class PaperExecutor:
             if self._stop.wait(timeout=self.poll_seconds):
                 break
 
-        self._close_all()
+        self._close_all(flatten=flatten_on_exit)
         self._write_log()
         logger.info("[%s] Executor stopped", self.market)
 
@@ -982,6 +1093,11 @@ class PaperExecutor:
                         logger.info("[%s] %s FILLED qty=%.2f at %.4f (entry_price proxy was %.4f)",
                                     self.market, sym, pos.qty,
                                     pos.entry_filled_price or pos.entry_price, pos.entry_price)
+                        # Place the broker-side protective stop NOW that
+                        # the position is real. Until this existed the
+                        # stop lived only in the Python polling loop, so
+                        # a daemon crash left the position naked.
+                        self._place_protective_stop(sym, pos)
                         self._save_positions()
                     else:
                         # The order is DEAD at the broker (cancelled,
@@ -1012,8 +1128,37 @@ class PaperExecutor:
                         logger.info("[%s] %s: filled qty changed %.2f -> %.2f",
                                     self.market, sym, pos.qty, fq)
                         pos.qty = fq
+                        # The protective stop covers a FIXED quantity, so
+                        # it must be replaced to cover the new size.
+                        # Otherwise a partially-filled-then-completed
+                        # order ends up with a stop for fewer shares than
+                        # are actually held — leaving part of the
+                        # position unprotected.
+                        self._place_protective_stop(sym, pos)
             except Exception:
                 pass
+
+            # The broker-side protective stop may have fired while the
+            # daemon was asleep, crashed or restarted. When it does, the
+            # position is closed AT THE BROKER and the daemon must record
+            # the trade — otherwise the exit never reaches the ledger
+            # and the position looks eternally open.
+            if self._protective_stop_filled(sym, pos):
+                fill = None
+                try:
+                    fill = self._get_fill_price(sym, pos.stop_order_id)
+                except Exception:
+                    fill = None
+                logger.info(
+                    "[%s] %s: broker-side protective stop filled — recording exit",
+                    self.market, sym)
+                # The position is already flat at the broker; do NOT
+                # submit another close order, just record the trade.
+                self._record_exit(
+                    sym, "stop", fill if fill else pos.stop_price,
+                    already_closed=True,
+                    exit_price_source="broker_fill" if fill else "estimate")
+                continue
 
             # Get current market price
             try:
@@ -1110,20 +1255,29 @@ class PaperExecutor:
         return True
 
     def _reconcile_with_broker(self):
-        """Detect broker positions this executor does not know about.
+        """Reconcile our tracked positions with the broker's actual holdings.
 
-        The Alpaca paper account is shared by several projects (the
-        Leveraged and OANDA repos hold the same API key), so a position
-        can appear here that was opened by a completely different
-        strategy. This executor has no stop, no target and no deadline
-        for such a position, so it is an unbounded risk that must be
-        flagged loudly.
+        Two distinct problems are handled here.
+
+        1. ORPHANED REMAINDERS. On 2026-10-30 the BAC entry order filled
+           3.91 shares but the position tracked only 1.00. The close
+           therefore sold 1 share and LEFT 2.91 shares at the broker
+           with no stop, no target and no deadline. The daemon then
+           classified the remainder as a "foreign" position and only
+           cleaned it up days later. If the broker holds MORE of a
+           symbol we own than we are tracking, the difference is our own
+           untracked fill and must be adopted.
+
+        2. FOREIGN POSITIONS. The Alpaca paper account is shared by
+           several projects (the Leveraged and OANDA repos hold the
+           same API key), so a position can appear here that was opened
+           by a completely different strategy. This executor has no
+           stop, no target and no deadline for such a position, so it
+           is an unbounded risk that must be flagged loudly.
 
         A position is "ours" if it is in self.positions. Anything else
-        at the broker that is not ours is reported. Positions belonging
-        to a different strategy are NOT closed automatically — that
-        could break someone else's trade — but they are logged and
-        surfaced by the end-of-day report.
+        at the broker that is not ours is reported but NOT closed
+        automatically — that could break someone else's trade.
         """
         try:
             broker_positions = {
@@ -1137,6 +1291,7 @@ class PaperExecutor:
         mine = {s for s, p in self.positions.items() if p.status != "exited"}
         for sym, qty in broker_positions.items():
             if sym in mine:
+                self._adopt_orphaned_remainder(sym, qty)
                 continue
             if abs(qty) < 1e-9:
                 continue
@@ -1151,6 +1306,34 @@ class PaperExecutor:
                 self.market, sym, qty,
             )
 
+    def _adopt_orphaned_remainder(self, sym: str, broker_qty: float):
+        """Adopt broker shares of our own symbol that we failed to track.
+
+        If the broker holds more of a symbol than the position tracks,
+        the extra shares came from OUR entry order (a fill the executor
+        did not observe) and belong to us. They must be tracked — and
+        protected — otherwise the close leaves them behind as an
+        unprotected orphan.
+        """
+        pos = self.positions.get(sym)
+        if pos is None or pos.status != "entered":
+            return
+        held = abs(float(broker_qty))
+        tracked = abs(float(pos.qty or 0.0))
+        if held <= tracked + 1e-6:
+            return
+
+        logger.warning(
+            "[%s] %s: broker holds %.4f sh but the position tracks %.4f — "
+            "adopting %.4f orphaned share(s) from our own entry fill",
+            self.market, sym, held, tracked, held - tracked,
+        )
+        pos.qty = held
+        # The protective stop covers a fixed quantity, so it must be
+        # resized to cover the newly-adopted shares.
+        self._place_protective_stop(sym, pos)
+        self._save_positions()
+
     def _close_position(self, sym: str, reason: str, exit_price: Optional[float]):
         pos = self.positions[sym]
         side = "sell" if pos.direction == "long" else "buy"
@@ -1161,20 +1344,89 @@ class PaperExecutor:
         # position (no stop, no target, no deadline).
         self._cancel_open_order(pos.order_id)
 
+        # Cancel the broker-side protective stop BEFORE flattening the
+        # position. If it were left working it could fire against a
+        # position that no longer exists, opening a naked SHORT (for a
+        # long) at the stop price.
+        self._cancel_protective_stop(sym, pos)
+
         # Fetch market price for time-based exits where no price was specified
         if exit_price is None:
             try:
                 exit_price = float(self._get_current_price(sym))
             except Exception:
-                exit_price = pos.entry_price  # fallback
+                exit_price = None
 
+        # Close at the broker and remember the ORDER id so the real fill
+        # price can be read back.
+        close_order_id = None
         try:
             # Close only what this executor actually holds. The account
             # is shared, so closing the whole broker position for a
             # symbol could flatten another strategy's trade.
-            self.broker.close_position(sym, pos.qty)
+            close_order_id = self.broker.close_position(sym, pos.qty)
         except Exception as e:
             logger.warning("[%s] Broker close failed for %s: %s", self.market, sym, e)
+
+        # THE EXIT PRICE MUST COME FROM THE BROKER'S ACTUAL FILL.
+        #
+        # The old code passed `pos.entry_price` as the exit price for
+        # forced closes, so the ledger booked the position as having
+        # exited AT ITS ENTRY PRICE — a guaranteed 0% trade, or (worse,
+        # when the quote differed) a fictitious profit. That is exactly
+        # what happened to the 2026-11-04 META trade: it was booked as
+        # a -$5.76 loss using the entry proxy, while the broker actually
+        # filled the exit at $629.756 for a -$0.80 loss.
+        #
+        # A market quote is only a FALLBACK: the real fill is whatever
+        # the broker executed at.
+        actual_exit = None
+        exit_price_source = "broker_fill"
+        if close_order_id:
+            actual_exit = self._await_fill_price(close_order_id)
+        if actual_exit is None and exit_price is not None:
+            actual_exit = float(exit_price)
+            exit_price_source = "quote"
+            logger.warning(
+                "[%s] %s: no broker fill price for close order %s — "
+                "using market quote %.4f as the exit price",
+                self.market, sym, close_order_id, actual_exit)
+        if actual_exit is None:
+            # Last resort: the current quote, else the entry fill. This
+            # MUST NOT be the entry proxy used before — but it is the
+            # last resort, so record that it is an estimate.
+            try:
+                actual_exit = float(self._get_current_price(sym))
+            except Exception:
+                actual_exit = pos.entry_filled_price or pos.entry_price
+            exit_price_source = "estimate"
+            logger.warning(
+                "[%s] %s: exit price is an ESTIMATE (%.4f) — broker fill unavailable",
+                self.market, sym, actual_exit)
+        exit_price = actual_exit
+
+        self._record_exit(sym, reason, exit_price,
+                          exit_price_source=exit_price_source)
+
+    def _record_exit(self, sym: str, reason: str, exit_price: Optional[float],
+                     already_closed: bool = False,
+                     exit_price_source: str = "broker_fill"):
+        """Book an exit into the ledger and update the capital curve.
+
+        Split out of `_close_position` so that an exit the BROKER
+        performed on its own (the protective stop firing) can be
+        recorded without submitting a second, duplicate close order.
+
+        `exit_price` must be the price the broker actually executed at.
+        """
+        pos = self.positions[sym]
+        side = "sell" if pos.direction == "long" else "buy"
+
+        if exit_price is None:
+            try:
+                exit_price = float(self._get_current_price(sym))
+            except Exception:
+                exit_price = pos.entry_filled_price or pos.entry_price
 
         # P&L must be computed from the ACTUAL fill price. The signal's
         # entry_price is a proxy (close of the signal bar); the market
@@ -1211,6 +1463,8 @@ class PaperExecutor:
         pos.exit_reason = reason
         pos.exit_price  = exit_price
         pos.pnl_bps     = pnl_bps
+        pos.stop_order_id = None
+        pos.stop_order_qty = None
 
         # The log row must carry everything the P&L report needs, in the
         # schema the report actually reads:
@@ -1241,6 +1495,10 @@ class PaperExecutor:
             "atr":          pos.atr,
             "market":       self.market,
             "close_mode":   pos.close_mode,
+            # Whether the exit price is the broker's ACTUAL fill or a
+            # fallback estimate. Rows with "quote" or "estimate" should
+            # be treated as lower-confidence when the P&L is audited.
+            "exit_price_source": exit_price_source,
         })
 
         logger.info(
@@ -1375,18 +1633,46 @@ class PaperExecutor:
         self._write_log()
         return True
 
-    def _close_all(self):
+    def _close_all(self, flatten: bool = True):
         """Flatten everything this executor owns, at exit.
 
         Entered positions are closed at the market; pending positions
         have their entry orders CANCELLED (nothing was filled, so there
         is nothing to close) and are then retired so they do not linger
         in the position file.
+
+        The exit price is NOT passed in. The old code passed
+        `pos.entry_price`, which made every forced close look like a
+        zero-P&L trade at the entry proxy — and, when the proxy
+        differed from the real fill, a fictitious profit. The closing
+        order's ACTUAL broker fill is read back instead.
+
+        `flatten=False` is used by the OVERNIGHT strategy on a routine
+        daemon stop. An overnight position is SUPPOSED to be held
+        across the daily wrapper's restart (it exits at the next
+        session's open, not at the daemon's convenience). Flattening it
+        on every restart meant the strategy was force-out of every
+        overnight position at the moment of the restart — the single
+        biggest source of divergence between the backtest and the live
+        book. The position is instead left open, with its broker-side
+        protective stop still working, and is re-adopted from the
+        position file by the next daemon.
         """
         for sym in list(self.positions):
             pos = self.positions[sym]
             if pos.status == "entered":
-                self._close_position(sym, "force_close", pos.entry_price)
+                if not flatten:
+                    # Leave the position open. It stays protected by the
+                    # broker-side stop, and the next daemon re-adopts it
+                    # from the position file.
+                    logger.info(
+                        "[%s/%s] Leaving %s open across shutdown "
+                        "(overnight strategy) — protected by stop order %s",
+                        self.market, self.strategy, sym, pos.stop_order_id,
+                    )
+                    continue
+                # exit_price=None → the real broker fill is used.
+                self._close_position(sym, "force_close", None)
             elif pos.status == "pending":
                 self._cancel_open_order(pos.order_id)
                 self._retire_dead_pending(sym, pos)
@@ -1529,6 +1815,43 @@ class PaperExecutor:
         except Exception:
             return 0.0
 
+    def _await_fill_price(self, order_id: Optional[str],
+                          timeout_s: float = 5.0) -> Optional[float]:
+        """Poll a closing order until it fills, and return the fill price.
+
+        A market order is not filled instantaneously — the broker
+        returns the order as "new"/"accepted" and fills it a moment
+        later. The ledger must record the price the broker ACTUALLY
+        executed at, so the close order is polled briefly for its fill.
+
+        Returns None if the order never reports a fill within the
+        timeout, in which case the caller falls back to a quote and
+        flags the row as an estimate.
+        """
+        if not order_id:
+            return None
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while True:
+            try:
+                o = self._get_order(order_id)
+                if o is not None:
+                    status = self._order_status(o)
+                    if status in ("filled", "partially_filled", "filled_partially"):
+                        price = getattr(o, "filled_avg_price", None)
+                        try:
+                            if price:
+                                return float(price)
+                        except Exception:
+                            pass
+                        return None
+                    if status in ("cancelled", "expired", "rejected"):
+                        return None
+            except Exception:
+                return None
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.25)
+
     def _cancel_open_order(self, order_id: Optional[str]) -> None:
         """Cancel a resting entry order, if it is still open.
 
@@ -1551,6 +1874,112 @@ class PaperExecutor:
         except Exception as e:
             logger.warning("[%s] Failed to cancel resting order %s: %s",
                            self.market, order_id, e)
+
+    # ── broker-side protective stop ───────────────────────────────────────
+
+    def _place_protective_stop(self, sym: str, pos: ActivePosition) -> Optional[str]:
+        """Place (or replace) the broker-side protective stop for `pos`.
+
+        Until this existed, an overnight position's stop existed ONLY in
+        the Python polling loop. If the daemon died — OOM-killed, killed
+        by systemd, crashed — the position sat at the broker with no
+        stop at all. A stop order rests AT THE BROKER, so it keeps
+        protecting the position regardless of what happens to this
+        process.
+
+        The stop quantity tracks the ACTUAL filled quantity, so a
+        partial fill is protected for exactly the shares held.
+        """
+        qty = abs(float(pos.qty or 0.0))
+        if qty < 1e-9:
+            return None
+
+        # A long position is protected by a SELL stop below the entry; a
+        # short by a BUY stop above it.
+        side = "sell" if pos.direction == "long" else "buy"
+
+        # Replace any existing stop: the position size may have changed
+        # (partial fill → later fill), and the old stop would then cover
+        # the wrong number of shares.
+        self._cancel_protective_stop(sym, pos)
+
+        try:
+            stop_id = self.broker.submit_stop_order(
+                sym, qty, pos.stop_price, side)
+        except NotImplementedError:
+            logger.info(
+                "[%s] %s: broker does not support stop orders — "
+                "relying on the in-process stop check only",
+                self.market, sym)
+            return None
+        except Exception as e:
+            # A missing protective stop must be loud: the position is
+            # then only protected while this daemon happens to be alive.
+            logger.error(
+                "[%s] %s: FAILED to place protective stop at %.2f (qty=%.2f): %s "
+                "— position is protected only by the in-process stop check",
+                self.market, sym, pos.stop_price, qty, e)
+            return None
+
+        pos.stop_order_id = stop_id
+        pos.stop_order_qty = qty
+        logger.info(
+            "[%s] %s: protective stop placed at %.2f for %.2f sh (order %s)",
+            self.market, sym, pos.stop_price, qty, stop_id,
+        )
+        return stop_id
+
+    def _cancel_protective_stop(self, sym: str, pos: ActivePosition) -> None:
+        """Cancel the broker-side protective stop for `pos`, if any."""
+        if not getattr(pos, "stop_order_id", None):
+            return
+        try:
+            o = self._get_order(pos.stop_order_id)
+            status = self._order_status(o) if o is not None else "unknown"
+            if status in ("new", "partially_filled", "pending_new", "accepted"):
+                self.broker.cancel_order(pos.stop_order_id)
+                logger.info("[%s] %s: protective stop %s cancelled",
+                            self.market, sym, pos.stop_order_id)
+        except Exception as e:
+            logger.warning("[%s] %s: could not cancel protective stop %s: %s",
+                           self.market, sym, pos.stop_order_id, e)
+        finally:
+            pos.stop_order_id = None
+            pos.stop_order_qty = None
+
+    def _protective_stop_filled(self, sym: str, pos: ActivePosition) -> bool:
+        """True if the broker-side protective stop has filled.
+
+        When the broker-side stop triggers, the position is closed at the
+        BROKER without the daemon doing anything. The daemon must notice
+        that on its next poll and record the trade, otherwise the exit
+        never reaches the ledger.
+        """
+        stop_id = getattr(pos, "stop_order_id", None)
+        if not stop_id:
+            return False
+        try:
+            o = self._get_order(stop_id)
+            if o is None:
+                return False
+            return self._order_status(o) in ("filled", "partially_filled",
+                                             "filled_partially")
+        except Exception:
+            return False
+
+    def _broker_position_qty(self, sym: str) -> Optional[float]:
+        """Quantity of `sym` currently held at the broker.
+
+        Returns None when the broker query fails (so callers can tell
+        "no position" apart from "could not check").
+        """
+        try:
+            for p in self.broker.client.get_all_positions():
+                if getattr(p, "symbol", None) == sym:
+                    return float(p.qty)
+        except Exception:
+            return None
+        return 0.0
 
     def _write_log(self):
         """Persist the trade log to disk, MERGING with any existing rows.

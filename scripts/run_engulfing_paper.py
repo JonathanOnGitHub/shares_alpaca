@@ -23,6 +23,7 @@ into the executor's own memory.
 import argparse
 import json
 import logging
+import signal
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -93,6 +94,30 @@ def run_executor(args, signals=None):
         strategy="engulfing",
         close_mode="overnight",
     )
+
+    # systemd stops the service with SIGTERM, so the daemon MUST handle
+    # it. Without a handler, SIGTERM kills the process outright: the
+    # trade log is not written, open positions are not flattened, and
+    # the broker-side protective stop is left working against a
+    # position this process still believes it owns.
+    #
+    # This handler was dropped in commit 7aa7b4c (which rewrote this
+    # file to add the --executor-only flag and the flock). Its absence
+    # is what produced the 2026-10-30 and 2026-11-04 "force_close"
+    # exits — the daemon was killed mid-position and the next start
+    # found the position gone but the ledger never updated.
+    #
+    # executor.run() calls _close_all() and _write_log() on exit, so
+    # stopping the executor cleanly is what records the trades.
+    def _sig_handler(signum, frame):
+        print(f"[run_engulfing] Signal {signum} received — shutting down "
+              f"gracefully (flattening positions, writing the trade log).",
+              flush=True)
+        executor.stop()
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
     try:
         executor.run()
     except KeyboardInterrupt:

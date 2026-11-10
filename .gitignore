@@ -53,3 +53,4 @@ paper_trades_engulfing.csv
 .fvg_scanner.lock
 .fvg_executor.lock
 .engulfing_executor.lock
+paper_trades_engulfing.csv.orig

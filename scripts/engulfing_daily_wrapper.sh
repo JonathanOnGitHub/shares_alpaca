@@ -75,14 +75,50 @@ else:
 
 # ── 3. Start the executor daemon ─────────────────────────────────────────────
 if [ "$SYSTEMD_OK" = "1" ]; then
-    # `restart` (not `start`) so a daemon left over from a previous
-    # session — including one wedged on a pending position — is
-    # replaced rather than joined. The engulfing strategy is an
-    # OVERNIGHT strategy, so its daemon is meant to survive the close
-    # and hold the position until the next session's exit.
-    systemctl --user restart shares-alpaca-engulfing-paper.service >> "$LOGFILE" 2>&1
-    systemctl --user show -p MainPID --value shares-alpaca-engulfing-paper.service > "$PIDFILE" 2>/dev/null || true
-    echo "$(date -Iseconds) — engulfing systemd unit restarted (PID $(cat "$PIDFILE" 2>/dev/null))" >> "$LOGFILE"
+    # ── DO NOT RESTART A DAEMON THAT IS HOLDING A POSITION ──────────────
+    #
+    # The engulfing strategy is an OVERNIGHT strategy: it enters at the
+    # open and exits at the NEXT session's open. Its daemon is therefore
+    # meant to be alive across the close, holding the position.
+    #
+    # `systemctl --user restart` was unconditional, so every daily run
+    # killed the daemon mid-position. With no SIGTERM handler (dropped
+    # in 7aa7b4c) the process died outright: no trade log, no flat, and
+    # the position left behind with no stop. Even with the handler
+    # restored, a restart would force-close an overnight position that
+    # the backtest expects to be held — the single largest source of
+    # divergence between the backtest and the live book.
+    #
+    # So: if the daemon is already running AND is holding a position,
+    # LEAVE IT ALONE. It continues to manage that position (and its
+    # broker-side protective stop) into the next session.
+    HOLDING=0
+    if [ -f "$REPO_DIR/.positions_engulfing.json" ]; then
+        HOLDING=$("$VENV_PY" -c "
+import json,sys
+try:
+    d=json.load(open('$REPO_DIR/.positions_engulfing.json'))
+    pos=d.get('positions') or {}
+    live=[s for s,p in pos.items() if p.get('status') in ('pending','entered')]
+    print(len(live))
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    fi
+
+    if [ "$HOLDING" -gt 0 ] && \
+       systemctl --user is-active --quiet shares-alpaca-engulfing-paper.service; then
+        PID="$(systemctl --user show -p MainPID --value shares-alpaca-engulfing-paper.service)"
+        echo "$PID" > "$PIDFILE"
+        echo "$(date -Iseconds) — engulfing daemon already running (PID $PID) and holding $HOLDING position(s) — NOT restarting" >> "$LOGFILE"
+    else
+        # `restart` (not `start`) so a daemon left over from a previous
+        # session — including one wedged on a pending position — is
+        # replaced rather than joined.
+        systemctl --user restart shares-alpaca-engulfing-paper.service >> "$LOGFILE" 2>&1
+        systemctl --user show -p MainPID --value shares-alpaca-engulfing-paper.service > "$PIDFILE" 2>/dev/null || true
+        echo "$(date -Iseconds) — engulfing systemd unit restarted (PID $(cat "$PIDFILE" 2>/dev/null))" >> "$LOGFILE"
+    fi
 else
     setsid "$VENV_PY" "$SCRIPT_DIR/run_engulfing_paper.py" --executor-only \
         >> "$LOGFILE" 2>&1 < /dev/null &
