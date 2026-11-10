@@ -304,7 +304,7 @@ def size_position(qty_raw: float, entry_proxy: float, risk_per_share: float,
 
 
 def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
-             respect_notional: bool = False):
+             respect_notional: bool = False, include_trades: bool = False):
     """Event-driven portfolio sim on the live path.
 
     Positions entered at a session's open are closed at the NEXT
@@ -478,7 +478,7 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
     peak = np.maximum.accumulate(eq)
     max_dd = float(np.min(eq / peak - 1)) if n else 0.0
 
-    return {
+    result = {
         "n_trades": n,
         "n_skipped": n_skipped,
         # ── return-stream metrics (size-independent; for reference only) ──
@@ -514,6 +514,9 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
         # x thousands of trades makes a >100MB file that the remote rejects.
         # Re-run with --verbose to dump them.
     }
+    if include_trades:
+        result["per_trade"] = per_trade
+    return result
 
 
 def sizing_diagnostics(trades, capital: float) -> dict:

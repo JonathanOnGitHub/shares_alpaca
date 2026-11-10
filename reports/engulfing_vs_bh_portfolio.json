@@ -1,0 +1,126 @@
+{
+  "universe": [
+    "TSLA",
+    "NVDA",
+    "AMD",
+    "AAPL",
+    "META",
+    "MSFT",
+    "AMZN",
+    "GOOGL",
+    "NFLX",
+    "INTC",
+    "LLY",
+    "JPM",
+    "UNH",
+    "COST",
+    "V",
+    "CRM",
+    "WMT",
+    "BAC",
+    "QCOM",
+    "GS"
+  ],
+  "capital": 10000.0,
+  "cost_bps": 10.0,
+  "bh": {
+    "ann_ret_pct": 36.97875685519409,
+    "ann_vol_pct": 30.98792485593772,
+    "sharpe": 1.1933279503906002,
+    "max_dd_pct": -51.92548613560221,
+    "total_ret_pct": 3078.0194499792187,
+    "n_held": 20,
+    "n_universe": 20,
+    "leftover_cash": 150.49579443067586,
+    "deployed_pct": 98.49504205569325
+  },
+  "strategy": {
+    "baseline (stop1.0, hold1)": {
+      "n_trades": 2470,
+      "total_pnl_dollars": -469.0832115670037,
+      "ann_ret_dollar_pct": -0.43708832272745246,
+      "sharpe_dollar": -0.4164426851724889,
+      "max_dd_dollar_pct": -6.810862803880058,
+      "win_rate_pct": 46.92307692307692,
+      "avg_bps": -9.184805626344861,
+      "avg_gross_notional": 209.7658203699506,
+      "capital_utilisation_pct": 2.097658203699506,
+      "stop_rate_pct": 19.51417004048583,
+      "time_exit_rate_pct": 74.21052631578947
+    },
+    "reoptimised (stop2.0, hold3)": {
+      "n_trades": 2231,
+      "total_pnl_dollars": 645.5265207888293,
+      "ann_ret_dollar_pct": 0.5715471067857969,
+      "sharpe_dollar": 0.3396991009352617,
+      "max_dd_dollar_pct": -3.2857048605811845,
+      "win_rate_pct": 53.24966382787988,
+      "avg_bps": 18.77087445097945,
+      "avg_gross_notional": 214.11373868689194,
+      "capital_utilisation_pct": 2.1411373868689196,
+      "stop_rate_pct": 15.015688032272523,
+      "time_exit_rate_pct": 82.56387270282384
+    }
+  },
+  "composite": {
+    "baseline (stop1.0, hold1)": {
+      "ann_ret_pct": 34.84829796278499,
+      "ann_vol_pct": 30.028897310341456,
+      "sharpe": 1.1604920954184959,
+      "max_dd_pct": -51.97946026532742,
+      "total_ret_pct": 2574.992342899016,
+      "avg_deployed_pct": 3.259848782906538
+    },
+    "reoptimised (stop2.0, hold3)": {
+      "ann_ret_pct": 34.090408604748305,
+      "ann_vol_pct": 28.749518990810373,
+      "sharpe": 1.1857731816537562,
+      "max_dd_pct": -51.28348875793966,
+      "total_ret_pct": 2414.291731253618,
+      "avg_deployed_pct": 6.33286802712737
+    }
+  },
+  "like_for_like": {
+    "baseline (stop1.0, hold1)": {
+      "ann_ret_pct": 37.24143950860501,
+      "ann_vol_pct": 29.249435886249152,
+      "sharpe": 1.2732361626882893,
+      "max_dd_pct": -51.30615860661951,
+      "total_ret_pct": 3120.438761559877
+    },
+    "reoptimised (stop2.0, hold3)": {
+      "ann_ret_pct": 37.043278620067646,
+      "ann_vol_pct": 29.062082514033794,
+      "sharpe": 1.2746257465265887,
+      "max_dd_pct": -50.27769139383027,
+      "total_ret_pct": 3078.0194499792187
+    }
+  },
+  "periods": {
+    "2015-01-07 .. 2017-01-12": {
+      "bh": 1.6769630556978854,
+      "baseline (stop1.0, hold1)": -0.7059830253575636,
+      "reoptimised (stop2.0, hold3)": -0.0288218325590279
+    },
+    "2017-01-18 .. 2019-04-23": {
+      "bh": 1.3045297434891079,
+      "baseline (stop1.0, hold1)": -0.14052179248833946,
+      "reoptimised (stop2.0, hold3)": 0.9013701030273429
+    },
+    "2019-04-24 .. 2021-08-06": {
+      "bh": 1.043946700859269,
+      "baseline (stop1.0, hold1)": -0.5112335150435867,
+      "reoptimised (stop2.0, hold3)": 0.5043620246226209
+    },
+    "2021-08-16 .. 2023-11-06": {
+      "bh": 0.3913102351383772,
+      "baseline (stop1.0, hold1)": -0.3123301767236686,
+      "reoptimised (stop2.0, hold3)": 0.4823958240347961
+    },
+    "2023-11-22 .. 2025-12-24": {
+      "bh": 0.5444141815872136,
+      "baseline (stop1.0, hold1)": -0.5346300674772795,
+      "reoptimised (stop2.0, hold3)": -0.023674627493992552
+    }
+  }
+}
