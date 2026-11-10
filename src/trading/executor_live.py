@@ -154,9 +154,16 @@ class AlpacaBackend(BrokerBackend):
         alive; a stop that rests at the broker keeps working when the
         daemon is OOM-killed, killed by systemd, or crashes.
 
-        GTC is used rather than DAY: an overnight position must keep its
-        stop across sessions, and a DAY order would expire at the close
-        and leave the position unprotected overnight.
+        GTC is preferred: an overnight position must keep its stop
+        across sessions, and a DAY order expires at the close, leaving
+        the position unprotected overnight.
+
+        Alpaca rejects a FRACTIONAL GTC stop ("stop/stop_limit
+        fractional GTC orders are not enabled") but accepts a fractional
+        DAY stop. So the order is first tried as GTC and falls back to
+        DAY — a DAY stop that expires at the close is still far better
+        than no stop at all, because it protects the position for the
+        whole session it was placed in.
         """
         from alpaca.trading.requests import StopOrderRequest
         from alpaca.trading.enums import OrderType
@@ -164,6 +171,7 @@ class AlpacaBackend(BrokerBackend):
         qty = abs(float(qty))
         if qty < 1e-9:
             raise ValueError("stop order quantity must be > 0")
+
         req = StopOrderRequest(
             symbol=symbol,
             qty=qty,
@@ -172,8 +180,28 @@ class AlpacaBackend(BrokerBackend):
             type=OrderType.STOP,
             time_in_force=self._TimeInForce.GTC,
         )
-        order = self.client.submit_order(req)
-        return str(order.id)
+        try:
+            order = self.client.submit_order(req)
+            return str(order.id)
+        except Exception as e:
+            msg = str(e)
+            if "fractional" not in msg.lower():
+                raise
+            # Fractional quantity: fall back to a DAY stop.
+            logger.warning(
+                "[Alpaca] Fractional GTC stop for %s rejected (%s) — "
+                "falling back to a DAY stop, which expires at the close",
+                symbol, msg[:120])
+            req = StopOrderRequest(
+                symbol=symbol,
+                qty=qty,
+                stop_price=round(float(stop_price), 2),
+                side=self._OrderSide.BUY if side == "buy" else self._OrderSide.SELL,
+                type=OrderType.STOP,
+                time_in_force=self._TimeInForce.DAY,
+            )
+            order = self.client.submit_order(req)
+            return str(order.id)
 
     def cancel_order(self, order_id: str) -> None:
         self.client.cancel_order_by_id(order_id)
@@ -963,6 +991,40 @@ class PaperExecutor:
                 logger.warning("[%s] %s: short size rounds to 0 shares — skipping",
                                self.market, sym)
                 return
+
+        # LONG positions are also rounded to whole shares, because a
+        # FRACTIONAL position cannot carry a broker-side GTC stop:
+        # Alpaca rejects one with "stop/stop_limit fractional GTC orders
+        # are not enabled". A fractional position would therefore be left
+        # with only the in-process stop check — exactly the naked-
+        # position failure the broker-side stop exists to prevent.
+        #
+        # The engulfing strategy's $200 notional cap routinely produces
+        # fractional sizes (GOOGL: 0.694 sh), so this is the common
+        # case, not an edge case.
+        if direction == "long":
+            whole = math.floor(qty)
+            if whole < 1:
+                # The capped size is under one share. Taking one share
+                # risks (stop distance) dollars, which is only acceptable
+                # if it stays within the trade's risk budget — otherwise
+                # the position would be riskier than the strategy
+                # intends and the setup must be skipped.
+                one_share_risk = stop_dist
+                if one_share_risk > risk_amt:
+                    logger.warning(
+                        "[%s] %s: one share risks %.2f, over the %.2f risk "
+                        "budget — skipping (a fractional size cannot carry "
+                        "a broker-side GTC stop)",
+                        self.market, sym, one_share_risk, risk_amt)
+                    return
+                whole = 1
+            if abs(whole - qty) > 1e-9:
+                logger.info(
+                    "[%s] %s: rounding size %.4f -> %d share(s) so a "
+                    "broker-side GTC stop can be placed (risk $%.2f)",
+                    self.market, sym, qty, whole, stop_dist * whole)
+            qty = float(whole)
 
         # Submit limit order at entry_price (rounded to 2dp for Alpaca penny-increment compliance)
         side = "buy" if direction == "long" else "sell"

@@ -639,6 +639,60 @@ def test_wrapper_does_not_restart_a_daemon_holding_a_position(tmp_path=None):
         "the wrapper restarts the daemon unconditionally"
 
 
+def test_long_size_is_whole_shares_so_a_gtc_stop_is_possible(tmp_path):
+    """A long position must be sized in WHOLE shares.
+
+    Alpaca rejects a fractional GTC stop ("stop/stop_limit fractional
+    GTC orders are not enabled"), so a fractional position would carry
+    only the in-process stop check — the naked-position failure the
+    broker-side stop exists to prevent. The engulfing $200 notional cap
+    routinely produces fractional sizes (GOOGL: 0.694 sh), so this is
+    the common case.
+    """
+    broker = FakeBroker(price=288.15, order_status="filled",
+                        filled_qty=1.0, filled_avg_price=288.15)
+    ex = make_executor(broker, tmp_path)
+
+    sig = make_signal(sym="GOOGL", entry=288.15, stop=284.67, target=295.12)
+    ex._open_position(sig, pd.Timestamp.now(), "GOOGL|test")
+
+    qty = ex.positions["GOOGL"].qty
+    assert float(qty).is_integer(), \
+        f"long size {qty} is fractional — a GTC stop cannot be placed"
+
+
+def test_short_size_is_whole_shares(tmp_path):
+    """Alpaca rejects fractional short orders outright."""
+    broker = FakeBroker(price=100.0, order_status="filled",
+                        filled_qty=3.0, filled_avg_price=100.0)
+    ex = make_executor(broker, tmp_path)
+
+    sig = make_signal(sym="META", direction="short", entry=100.0,
+                      stop=105.0, target=90.0)
+    ex._open_position(sig, pd.Timestamp.now(), "META|test")
+
+    qty = ex.positions["META"].qty
+    assert float(qty).is_integer(), \
+        f"short size {qty} is fractional — Alpaca rejects fractional shorts"
+
+
+def test_stop_order_falls_back_to_day_for_fractional_qty(tmp_path):
+    """The backend must fall back to a DAY stop when GTC is refused.
+
+    A DAY stop expires at the close, but it still protects the position
+    for the whole session — far better than no broker-side stop.
+    """
+    import inspect
+    from src.trading.executor_live import AlpacaBackend
+    src = inspect.getsource(AlpacaBackend.submit_stop_order)
+    assert "fractional" in src, \
+        "the stop order does not handle a fractional rejection"
+    assert "TimeInForce.DAY" in src, \
+        "there is no DAY fallback for a fractional stop"
+    assert "TimeInForce.GTC" in src, \
+        "the stop order is not GTC-first"
+
+
 if __name__ == "__main__":
     import tempfile
     failures = 0
