@@ -68,6 +68,7 @@ LIVE_TOP_N = 20
 # ── reporting knobs ─────────────────────────────────────────────────────────
 CAPITALS = [10_000.0, 50_000.0, 103_000.0, 250_000.0]
 COST_BPS = [0.0, 10.0]
+HOLD_PERIODS = [1, 2, 3, 5, 10]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -139,12 +140,17 @@ def detect_signals(df, trend_lookback: int = TREND_LOOKBACK) -> list[dict]:
     return out
 
 
-def build_trades(price_df, tickers) -> list[dict]:
+def build_trades(price_df, tickers, hold_sessions: int = 1) -> list[dict]:
     """Turn signals into concrete entry/exit pairs on the LIVE path.
 
     Entry : market order at the OPEN of the session after the signal bar.
     Exit  : stop / target hit during that session, otherwise the OPEN of
             the following session (the live close deadline).
+
+    `hold_sessions` extends the hold beyond the live 1-session rule:
+    the position is carried for up to N sessions, exiting at the open of
+    session entry+N, or earlier on a stop/target hit. 0 means "hold
+    until stop or target" (the published, unbounded rule).
     """
     trades = []
     for tk in tickers:
@@ -156,6 +162,7 @@ def build_trades(price_df, tickers) -> list[dict]:
         l = df["Low"].values
         c = df["Close"].values
         dates = df.index
+        tk_trades: list[dict] = []
 
         for sig in detect_signals(df):
             i = sig["bar_i"]
@@ -173,24 +180,47 @@ def build_trades(price_df, tickers) -> list[dict]:
                 continue
 
             # ── exit ─────────────────────────────────────────────────────
+            # Walk forward up to hold_sessions sessions. On each one:
+            # a gap through the stop fills at the OPEN (the broker's GTC
+            # stop cannot fill below the open), otherwise a stop/target
+            # hit fills at its level.
             exit_price = None
             exit_reason = None
+            exit_bar = -1
             if i + 2 >= len(c):
                 # no following session in the data — cannot close, skip
                 continue
-            if l[i + 1] <= stop:
-                exit_price, exit_reason = stop, "stop"
-            elif h[i + 1] >= target:
-                exit_price, exit_reason = target, "target"
-            else:
-                exit_price = float(o[i + 2])    # close deadline: next open
-                exit_reason = "overnight_exit"
+            # Sessions traded after entry = i+1 .. i+hold_sessions; the
+            # close deadline is the open of the session after that window.
+            # hold_sessions=1 is the live rule (trade session i+1, exit at
+            # the open of i+2); hold_sessions=0 trades to the end of the
+            # data (the published, unbounded rule).
+            last_bar = len(c) - 1 if hold_sessions == 0 else min(i + hold_sessions, len(c) - 1)
+            for j in range(i + 1, last_bar + 1):
+                if j >= len(c):
+                    break
+                if o[j] <= stop:
+                    exit_price, exit_reason, exit_bar = float(o[j]), "stop", j
+                    break
+                if l[j] <= stop:
+                    exit_price, exit_reason, exit_bar = stop, "stop", j
+                    break
+                if h[j] >= target:
+                    exit_price, exit_reason, exit_bar = target, "target", j
+                    break
+            if exit_price is None:
+                # close deadline: open of the session after the hold window
+                exit_bar = last_bar + 1
+                if exit_bar >= len(c):
+                    continue      # no session left to close in — skip
+                exit_price = float(o[exit_bar])
+                exit_reason = f"hold_{hold_sessions}_exit"
 
-            trades.append({
+            tk_trades.append({
                 "ticker": tk,
                 "signal_date": sig["bar_date"],
                 "entry_date": str(dates[i + 1].date()),
-                "exit_date": str(dates[i + 2].date()),
+                "exit_date": str(dates[exit_bar].date()),
                 "proxy": sig["proxy"],
                 "entry": entry,
                 "stop": stop,
@@ -198,7 +228,22 @@ def build_trades(price_df, tickers) -> list[dict]:
                 "exit_price": exit_price,
                 "exit_reason": exit_reason,
                 "risk_per_share": abs(sig["proxy"] - stop),
+                "_entry_bar": i + 1,
+                "_exit_bar": exit_bar,
             })
+
+        # The live executor skips a signal for a symbol that already has an
+        # open position, so overlapping setups on the same ticker are never
+        # all taken. Longer holds overlap more, so this matters: without it
+        # a multi-session hold would stack positions the live system never
+        # opens.
+        tk_trades.sort(key=lambda t: t["_entry_bar"])
+        last_exit_bar = -1
+        for t in tk_trades:
+            if t["_entry_bar"] <= last_exit_bar:
+                continue
+            trades.append(t)
+            last_exit_bar = t["_exit_bar"]
     return trades
 
 
@@ -287,46 +332,55 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
     per_trade: list[dict] = []
     qty_hist: dict[str, int] = {}
 
+    def realise(t):
+        """Book a closed trade into the running portfolio stats."""
+        nonlocal realized_capital, n_trades, gross_notional, total_risk
+        nonlocal wins, stops, targets, time_exits, n_cap_breach, n_risk_breach
+        rec = t.get("_rec")
+        if rec is None:
+            return
+        gross = rec["pnl_dollars"]
+        realized_capital += gross
+        n_trades += 1
+        gross_notional += rec["notional"]
+        total_risk += rec["risk_dollars"]
+        pnls.append(rec["ret"])
+        bps_list.append(rec["pnl_bps"])
+        if rec["pnl_bps"] > 0:
+            wins += 1
+        if rec["exit_reason"] == "stop":
+            stops += 1
+        elif rec["exit_reason"] == "target":
+            targets += 1
+        else:
+            time_exits += 1
+        if rec["notional"] > rec["max_notional"] * 1.000001:
+            n_cap_breach += 1
+        if rec["risk_dollars"] > rec["risk_amt"] * 1.000001:
+            n_risk_breach += 1
+        per_trade.append({
+            "ticker": t["ticker"], "entry_date": t["entry_date"],
+            "exit_date": t["exit_date"], "qty": rec["qty"],
+            "entry": t["entry"], "exit": t["exit_price"],
+            "exit_reason": rec["exit_reason"],
+            "pnl_dollars": gross, "pnl_bps": rec["pnl_bps"],
+            "risk_dollars": rec["risk_dollars"],
+            "notional": rec["notional"],
+        })
+
     for d in all_dates:
         # ── 1. exits ──────────────────────────────────────────────────────
+        # Exits are realised BEFORE new entries so that the capital freed
+        # by a close is available to size the next cohort.
+        #
+        # A trade that stops out or targets during its OWN entry session
+        # has exit_date == entry_date, so its exit falls on the same date
+        # as its entry. Processing that exit first would find no sizing
+        # record yet and silently DROP the trade — so those exits are
+        # deferred to step 3, after their entry has been sized.
         for t in trades:
-            if t["exit_date"] != d:
-                continue
-            # the trade's sizing must be resolved consistently at entry
-            # time; recompute it here from the SAME realized-capital rule
-            # is not possible (capital changes), so instead exits are
-            # realised from a per-trade record built during the entry pass.
-            rec = t.get("_rec")
-            if rec is None:
-                continue
-            gross = rec["pnl_dollars"]
-            realized_capital += gross
-            n_trades += 1
-            gross_notional += rec["notional"]
-            total_risk += rec["risk_dollars"]
-            pnls.append(rec["ret"])
-            bps_list.append(rec["pnl_bps"])
-            if rec["pnl_bps"] > 0:
-                wins += 1
-            if rec["exit_reason"] == "stop":
-                stops += 1
-            elif rec["exit_reason"] == "target":
-                targets += 1
-            else:
-                time_exits += 1
-            if rec["notional"] > rec["max_notional"] * 1.000001:
-                n_cap_breach += 1
-            if rec["risk_dollars"] > rec["risk_amt"] * 1.000001:
-                n_risk_breach += 1
-            per_trade.append({
-                "ticker": t["ticker"], "entry_date": t["entry_date"],
-                "exit_date": t["exit_date"], "qty": rec["qty"],
-                "entry": t["entry"], "exit": t["exit_price"],
-                "exit_reason": rec["exit_reason"],
-                "pnl_dollars": gross, "pnl_bps": rec["pnl_bps"],
-                "risk_dollars": rec["risk_dollars"],
-                "notional": rec["notional"],
-            })
+            if t["exit_date"] == d and t["entry_date"] != d:
+                realise(t)
 
         # ── 2. entries ────────────────────────────────────────────────────
         for t in by_entry.get(d, []):
@@ -362,6 +416,13 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
             }
             key = f"{qty:.4f}"
             qty_hist[key] = qty_hist.get(key, 0) + 1
+
+        # ── 3. same-day exits ────────────────────────────────────────────
+        # Trades that stopped out or targeted during their own entry
+        # session: their sizing is now known, so realise them here.
+        for t in trades:
+            if t["exit_date"] == d and t["entry_date"] == d:
+                realise(t)
 
     # ── metrics ──────────────────────────────────────────────────────────
     # IMPORTANT: the per-trade RETURN stream is independent of position
@@ -444,55 +505,6 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
     }
 
 
-def build_unbounded_trades(price_df, tickers) -> list[dict]:
-    """Published-style trades: hold until stop/target, unbounded sessions.
-
-    The published backtest (reports/engulfing_summary.md) uses this rule,
-    while the live executor force-closes at the NEXT session's open. The
-    two are different strategies and the published Sharpe does not
-    describe live behaviour — so both are reported side by side.
-    """
-    trades = []
-    for tk in tickers:
-        df = price_df[tk].dropna().sort_index()
-        if len(df) < 30:
-            continue
-        o = df["Open"].values
-        h = df["High"].values
-        l = df["Low"].values
-        c = df["Close"].values
-        dates = df.index
-        for sig in detect_signals(df):
-            i = sig["bar_i"]
-            if i + 1 >= len(c):
-                continue
-            entry = float(o[i + 1])
-            stop, target = sig["stop"], sig["target"]
-            if entry <= 0 or entry <= stop:
-                continue
-            exit_price = exit_reason = None
-            exit_bar = -1
-            for j in range(i + 2, len(c)):
-                if l[j] <= stop:
-                    exit_price, exit_reason, exit_bar = stop, "stop", j
-                    break
-                if h[j] >= target:
-                    exit_price, exit_reason, exit_bar = target, "target", j
-                    break
-            if exit_price is None:
-                continue
-            trades.append({
-                "ticker": tk, "signal_date": sig["bar_date"],
-                "entry_date": str(dates[i + 1].date()),
-                "exit_date": str(dates[exit_bar].date()),
-                "proxy": sig["proxy"], "entry": entry, "stop": stop,
-                "target": target, "exit_price": exit_price,
-                "exit_reason": exit_reason,
-                "risk_per_share": abs(sig["proxy"] - stop),
-            })
-    return trades
-
-
 def sizing_diagnostics(trades, capital: float) -> dict:
     """How the sizing rule behaves: skips, notional-cap breaches, risk."""
     risk_amt = capital * RISK_PCT
@@ -550,7 +562,6 @@ def main():
 
     results = {}
     diagnostics = {}
-    comparisons = {}
 
     for uni_name, universe in (("live_top20", live_universe),
                                ("all60", all_universe)):
@@ -579,33 +590,71 @@ def main():
                           f"avgrisk=${r['avg_risk_dollars']:7.2f} "
                           f"maxNot${r['max_gross_notional']:8,.2f}")
 
-    # ── live exit rule vs published (unbounded) exit rule ────────────────
-    print(f"\n{'═'*72}\nEXIT-RULE COMPARISON (live top-20, $10k capital)\n{'═'*72}")
-    live_tr = build_trades(price_df, live_universe)
-    unb_tr = build_unbounded_trades(price_df, live_universe)
-    for label, tr in (("live 1-session hold", live_tr),
-                       ("published unbounded hold", unb_tr)):
-        reasons = {}
+    # ── hold-period comparison ──────────────────────────────────────────
+    # Does a longer hold recover any of the edge the 1-session live rule
+    # gives up? hold_sessions=0 is the published, unbounded rule.
+    print(f"\n{'═'*72}\nHOLD-PERIOD COMPARISON (live top-20, $10k capital, whole shares)\n{'═'*72}")
+    hold_results = {}
+    for hold in (1, 2, 3, 5, 10, 0):
+        tr = build_trades(price_df, live_universe, hold_sessions=hold)
+        label = "unbounded" if hold == 0 else f"{hold} session{'s' if hold > 1 else ''}"
+        reasons: dict[str, int] = {}
         for t in tr:
             reasons[t["exit_reason"]] = reasons.get(t["exit_reason"], 0) + 1
-        r = simulate(tr, 10_000.0, True, 0.0)
-        comparisons[label] = {
-            "n": len(tr),
-            "exit_reasons": reasons,
-            "sharpe_dollar": r["sharpe_dollar"],
-            "total_pnl_dollars": r["total_pnl_dollars"],
-        }
-        print(f"  {label:26s} n={len(tr):5d}  sharpe$={r['sharpe_dollar']:6.2f}  "
-              f"P&L ${r['total_pnl_dollars']:10,.2f}  {reasons}")
+        row = {}
+        for cost in (0.0, 10.0):
+            r = simulate(tr, 10_000.0, True, cost)
+            row[f"cost{int(cost)}"] = {
+                "n": r["n_trades"],
+                "skipped": r["n_skipped"],
+                "sharpe_dollar": r["sharpe_dollar"],
+                "total_pnl_dollars": r["total_pnl_dollars"],
+                "ann_ret_dollar_pct": r["ann_ret_dollar_pct"],
+                "max_dd_dollar_pct": r["max_dd_dollar_pct"],
+            }
+        row["exit_reasons"] = reasons
+        hold_results[label] = row
+        print(f"  {label:14s} n={len(tr):5d}  "
+              f"sharpe$@0={row['cost0']['sharpe_dollar']:6.2f}  "
+              f"P&L@0=${row['cost0']['total_pnl_dollars']:9,.2f}  |  "
+              f"sharpe$@10={row['cost10']['sharpe_dollar']:6.2f}  "
+              f"P&L@10=${row['cost10']['total_pnl_dollars']:9,.2f}")
+        print(f"                 {reasons}")
+
+    # ── robustness: is a longer hold better in EVERY period, or just on average? ──
+    period_rows = {}
+    all_dates = sorted({t["entry_date"] for t in build_trades(price_df, live_universe, 1)})
+    chunks = [list(c) for c in np.array_split(np.array(all_dates), 5)]
+    for chunk in chunks:
+        if not len(chunk):
+            continue
+        lo, hi = str(chunk[0]), str(chunk[-1])
+        row = {}
+        for hold in HOLD_PERIODS:
+            sub = [t for t in build_trades(price_df, live_universe, hold)
+                   if lo <= t["entry_date"] <= hi]
+            if not sub:
+                row[hold] = "n/a"
+                continue
+            row[hold] = simulate(sub, 10_000.0, True, 10.0)["sharpe_dollar"]
+        period_rows[f"{lo} .. {hi}"] = row
+    print(f"\nPer-period Sharpe$ @10bps:")
+    for period, row in period_rows.items():
+        print(f"  {period:26s} " +
+              " ".join(f"H{h}={row[h]:.2f}" if isinstance(row[h], float) else f"H{h}=n/a"
+                       for h in HOLD_PERIODS))
 
     with open(OUT_JSON, "w") as fh:
         json.dump({"results": results, "sizing_diagnostics": diagnostics,
-                   "exit_rule_comparison": comparisons}, fh, indent=2, default=str)
+                   "hold_period_comparison": hold_results,
+                   "period_robustness": period_rows},
+                  fh, indent=2, default=str)
     print(f"\nSaved → {OUT_JSON}")
-    _write_md(results, diagnostics, comparisons)
+    _write_md(results, diagnostics, hold_results, period_rows)
 
 
-def _write_md(results: dict, diagnostics: dict, comparisons: dict) -> None:
+def _write_md(results: dict, diagnostics: dict, hold_results: dict,
+              period_rows: dict) -> None:
     lines = [
         "# Engulfing `bull_overnight_tl10` — Whole-Share vs Fractional Sizing",
         "",
@@ -667,21 +716,53 @@ def _write_md(results: dict, diagnostics: dict, comparisons: dict) -> None:
 
     lines += [
         "",
-        "## Exit rule — live vs published",
+        "## Hold period — does a longer hold recover the edge?",
         "",
-        "| Exit rule | N | Sharpe$ | Total P&L $ | Exit reasons |",
-        "|---|---:|---:|---:|---|",
+        "Live top-20 universe, $10,000 capital, whole shares. The live rule",
+        "is **1 session** (force-close at the next open); `unbounded` is the",
+        "published rule (hold until stop or target).",
+        "",
+        "| Hold | N | Sharpe$ @0bps | P&L $ @0bps | Sharpe$ @10bps | P&L $ @10bps | Ann ret% @0 | Max DD% @0 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for label, c in comparisons.items():
-        reasons = ", ".join(f"{k}={v}" for k, v in sorted(c["exit_reasons"].items()))
-        lines.append(f"| {label} | {c['n']} | {c['sharpe_dollar']:.2f} | "
-                     f"{c['total_pnl_dollars']:,.2f} | {reasons} |")
+    for label, h in hold_results.items():
+        c0, c10 = h["cost0"], h["cost10"]
+        lines.append(
+            f"| {label} | {c0['n']} | {c0['sharpe_dollar']:.2f} | "
+            f"{c0['total_pnl_dollars']:,.2f} | {c10['sharpe_dollar']:.2f} | "
+            f"{c10['total_pnl_dollars']:,.2f} | "
+            f"{c0['ann_ret_dollar_pct']:.2f} | {c0['max_dd_dollar_pct']:.2f} |"
+        )
     lines += [
         "",
-        "The published backtest holds until the stop or target with NO time",
-        "limit. The live executor force-closes at the NEXT session's open.",
-        "They are different strategies, so the published Sharpe does not",
-        "describe live behaviour.",
+        "### Exit reasons",
+        "",
+        "| Hold | Exit reasons |",
+        "|---|---|",
+    ]
+    for label, h in hold_results.items():
+        reasons = ", ".join(f"{k}={v}" for k, v in sorted(h["exit_reasons"].items()))
+        lines.append(f"| {label} | {reasons} |")
+
+    lines += [
+        "",
+        "### Robustness — Sharpe$ per calendar period @10bps",
+        "",
+        "| Period | " + " | ".join(f"H{h}" for h in HOLD_PERIODS) + " |",
+        "|---|" + "---:|" * len(HOLD_PERIODS),
+    ]
+    for period, row in period_rows.items():
+        cells = " | ".join(
+            (f"{row[h]:.2f}" if isinstance(row[h], (int, float)) else "n/a")
+            for h in HOLD_PERIODS
+        )
+        lines.append(f"| {period} | {cells} |")
+
+    lines += [
+        "",
+        "Note: overlapping setups on the same ticker are dropped, matching the",
+        "live executor's \"already have an active position\" skip — so a longer",
+        "hold trades fewer distinct setups, not more.",
     ]
     OUT_MD.write_text("\n".join(lines) + "\n")
     print(f"Summary saved → {OUT_MD}")
