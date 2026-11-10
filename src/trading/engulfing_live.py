@@ -4,8 +4,12 @@ Engulfing Live Signal Generator
 Variant : bull_overnight_tl10  (bullish engulfing after 10-day downtrend)
 Entry   : open of next day
 Exit    : next day close  OR  stop/target hit (whichever comes first)
-Stop    : H[i] - 1 × ATR14
-Target  : entry + 2 × risk
+Stop    : H[i] - STOP_ATR_MULT × ATR14
+Target  : entry + TARGET_MULT × risk
+
+TARGET_MULT / STOP_ATR_MULT are the reoptimised values from
+scripts/backtest_target_sweep.py (selected on a train window, scored
+out of sample). The previous live values were 2.0 and 1.0.
 
 Shares_alpaca layout — writes signals_engulfing.json.
 Cron: weekdays ~17:00 BST (12:00 ET) to catch today's engulfing.
@@ -32,6 +36,10 @@ from src.data.alpaca_client import AlpacaClient
 OUT = ROOT / "signals_engulfing.json"
 RANKINGS = ROOT / "data" / "universe_rankings.pkl"
 
+# Reoptimised on the live path (see reports/engulfing_target_sweep_summary.md).
+TARGET_MULT = 2.0        # reward-to-risk multiple
+STOP_ATR_MULT = 2.0      # stop width in ATR14 units
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _atr14(high, low, close) -> float:
@@ -56,7 +64,9 @@ def _atr14(high, low, close) -> float:
 
 
 def _detect_engulfing(df: pd.DataFrame, trend_lookback: int = 10,
-                      target_date=None) -> list[dict]:
+                      target_date=None,
+                      target_mult: float = TARGET_MULT,
+                      stop_atr_mult: float = STOP_ATR_MULT) -> list[dict]:
     """
     Scan daily bars for bullish engulfing + 10-day downtrend.
     Returns list of signal dicts (one per engulfing bar on the target date).
@@ -139,9 +149,9 @@ def _detect_engulfing(df: pd.DataFrame, trend_lookback: int = 10,
 
         # Entry: next day open (backtest uses next bar open; live proxy = today's close)
         entry_price = float(c[i])
-        stop_price  = float(h[i]) - atr_val
+        stop_price  = float(h[i]) - stop_atr_mult * atr_val
         risk        = abs(entry_price - stop_price)
-        target      = entry_price + 2.0 * risk
+        target      = entry_price + target_mult * risk
 
         signals.append({
             "direction":     "long",

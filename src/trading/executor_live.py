@@ -403,6 +403,9 @@ class PaperExecutor:
     """
 
     STALENESS_BARS    = 3       # skip signals older than this
+    # Overnight hold window in sessions; overridden per-instance in __init__.
+    # Class default so instances built with __new__ (tests) still have it.
+    HOLD_SESSIONS     = 1
     MARKET_ORDER_AGE  = 3       # bars before switching to market order
     PAPER_CAPITAL_US  = 10_000.0  # USD
     PAPER_CAPITAL_UK  = 10_000.0  # GBP
@@ -416,6 +419,7 @@ class PaperExecutor:
         log_file: str = "paper_trades.csv",
         strategy: str = "fvg",          # tag for portfolio tracking
         close_mode: Literal["intraday", "overnight"] = "intraday",
+        hold_sessions: int = 1,
     ):
         self.signals_file = Path(signals_file)
         self.market       = market.upper()
@@ -423,8 +427,8 @@ class PaperExecutor:
         self.log_file     = Path(log_file)
         self.strategy     = strategy        # "fvg" or "engulfing"
         self.close_mode   = close_mode      # "intraday" or "overnight"
+        self.hold_sessions = max(int(hold_sessions), 1)  # overnight hold window
         self._stop        = Event()
-
         # Initialise broker backend
         if broker == "alpaca":
             self._init_alpaca()
@@ -711,6 +715,11 @@ class PaperExecutor:
         The session close/open is a US/Eastern wall-clock event, so the
         timestamp is built in ET and converted. Building it in host-local
         time is wrong by an hour for half the year.
+
+        `hold_sessions` extends the overnight hold: the position is carried
+        for N sessions and closed at the open of the session after that
+        window. The reoptimised value comes from
+        scripts/backtest_target_sweep.py.
         """
         if self.close_mode == "intraday":
             hour, minute = 16, 0
@@ -721,8 +730,11 @@ class PaperExecutor:
                 except Exception:
                     hour, minute = 16, 0
             return self._session_close_ts(entry_date, hour=hour, minute=minute)
-        # Overnight: open of the next weekday after the entry session.
+        # Overnight: open of the Nth weekday after the entry session.
+        n = max(int(getattr(self, "hold_sessions", self.HOLD_SESSIONS)), 1)
         next_session = self._next_weekday(entry_date)
+        for _ in range(n - 1):
+            next_session = self._next_weekday(next_session)
         ts = pd.Timestamp(next_session).tz_localize(self.ET) + pd.Timedelta(hours=9, minutes=30)
         return ts.tz_convert(self._host_tz()).tz_localize(None)
 

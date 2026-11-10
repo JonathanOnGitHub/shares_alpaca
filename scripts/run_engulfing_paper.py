@@ -26,6 +26,11 @@ from src.trading.process_lock import acquire_lock, lock_holder_pid
 # Advisory flock for the engulfing executor — one daemon per strategy.
 EXECUTOR_LOCK = ROOT / ".engulfing_executor.lock"
 
+# Overnight hold window, in sessions. 1 is the original live behaviour
+# (force-close at the next open); the reoptimised value comes from
+# scripts/backtest_target_sweep.py. Overridable with --hold-sessions.
+ENGULFING_HOLD_SESSIONS = 3
+
 def run_signals(args):
     print("[run_engulfing] Generating engulfing signals...")
     signals = generate_signals(
@@ -72,6 +77,7 @@ def run_executor(args, signals=None):
         log_file=str(ROOT / "paper_trades_engulfing.csv"),
         strategy="engulfing",
         close_mode="overnight",
+        hold_sessions=args.hold_sessions,
     )
 
     # systemd stops the service with SIGTERM, so the daemon has to handle
@@ -101,6 +107,8 @@ def main():
     parser.add_argument("--lookback", type=int, default=252)
     parser.add_argument("--date", type=str, default=None,
                         help="Emit signals as-if on this date (YYYY-MM-DD)")
+    parser.add_argument("--hold-sessions", type=int, default=ENGULFING_HOLD_SESSIONS,
+                        help="Overnight hold window in sessions (reoptimised: 3)")
     args = parser.parse_args()
 
     # --executor-only is mutually exclusive with --signals-only: one

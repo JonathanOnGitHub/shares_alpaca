@@ -96,12 +96,17 @@ def live_atr(high, low, close, i: int) -> float:
     return float(np.mean(tr[1:15]))
 
 
-def detect_signals(df, trend_lookback: int = TREND_LOOKBACK) -> list[dict]:
+def detect_signals(df, trend_lookback: int = TREND_LOOKBACK,
+                   target_mult: float = 2.0,
+                   stop_atr_mult: float = 2.0) -> list[dict]:
     """Bullish engulfing + downtrend, evaluated on every bar.
 
     Mirrors the live detector's per-bar logic (the live generator simply
     restricts the match to one target date; backtesting evaluates every
     bar as if it were "today").
+
+    `target_mult` is the reward-to-risk multiple (the live strategy uses
+    2.0) and `stop_atr_mult` the ATR multiple for the stop (live: 1.0).
     """
     df = df.dropna().sort_index()
     o = df["Open"].values
@@ -123,11 +128,11 @@ def detect_signals(df, trend_lookback: int = TREND_LOOKBACK) -> list[dict]:
 
         atr_val = live_atr(h, l, c, i)
         entry_proxy = float(c[i])          # live signal's entry_price proxy
-        stop = float(h[i]) - atr_val
+        stop = float(h[i]) - stop_atr_mult * atr_val
         if stop <= 0 or stop >= entry_proxy:
             continue                        # nonsense geometry — live skips
         risk = abs(entry_proxy - stop)
-        target = entry_proxy + 2.0 * risk
+        target = entry_proxy + target_mult * risk
 
         out.append({
             "bar_i": i,
@@ -140,7 +145,8 @@ def detect_signals(df, trend_lookback: int = TREND_LOOKBACK) -> list[dict]:
     return out
 
 
-def build_trades(price_df, tickers, hold_sessions: int = 1) -> list[dict]:
+def build_trades(price_df, tickers, hold_sessions: int = 1,
+                 target_mult: float = 2.0, stop_atr_mult: float = 2.0) -> list[dict]:
     """Turn signals into concrete entry/exit pairs on the LIVE path.
 
     Entry : market order at the OPEN of the session after the signal bar.
@@ -164,7 +170,8 @@ def build_trades(price_df, tickers, hold_sessions: int = 1) -> list[dict]:
         dates = df.index
         tk_trades: list[dict] = []
 
-        for sig in detect_signals(df):
+        for sig in detect_signals(df, target_mult=target_mult,
+                                  stop_atr_mult=stop_atr_mult):
             i = sig["bar_i"]
             if i + 1 >= len(c):
                 continue
@@ -497,6 +504,10 @@ def simulate(trades, capital: float, whole_shares: bool, cost_bps: float,
         "time_exit_rate_pct": (time_exits / n * 100) if n else 0.0,
         "n_cap_breach": n_cap_breach,
         "n_risk_breach": n_risk_breach,
+        "cap_breach_rate_pct": (n_cap_breach / n * 100) if n else 0.0,
+        "risk_breach_rate_pct": (n_risk_breach / n * 100) if n else 0.0,
+        "avg_notional_dollars": (gross_notional / n) if n else 0.0,
+        "avg_qty": (sum(p["qty"] for p in per_trade) / n) if n else 0.0,
         "qty_hist": dict(sorted(qty_hist.items(), key=lambda kv: -kv[1])[:12]),
         "final_capital": realized_capital,
         # Per-trade rows are intentionally NOT serialised: 24 configurations
