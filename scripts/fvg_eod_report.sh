@@ -22,27 +22,42 @@ echo "=== $(date -Iseconds) — FVG end-of-day report ===" >> "$REPO_DIR/executo
 # is still alive (wedged on a pending position, or killed mid-session),
 # stop it now so the next session starts from a clean process.
 #
-# Since 2026-11-07 the daemon is owned by
-# shares-alpaca-fvg-executor.service, so it is stopped with
-# `systemctl --user stop` rather than by killing the PID directly.
-# Killing the PID behind systemd's back leaves the unit in a state
-# where systemd's Restart=on-failure policy can immediately respawn
-# the executor mid-report.
-if systemctl --user is-active --quiet shares-alpaca-fvg-executor.service 2>/dev/null; then
-    echo "stopping FVG executor unit at end of session" >> "$REPO_DIR/executor.log"
-    systemctl --user stop shares-alpaca-fvg-executor.service >> "$REPO_DIR/executor.log" 2>&1
-    sleep 2
+# Since the systemd migration the executor runs in its own unit, so it is
+# stopped with `systemctl --user stop` rather than by killing a PID from
+# a file. The legacy PID-file path is kept as a fallback for any daemon
+# still running from before the migration.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
+EXEC_UNIT="shares-alpaca-fvg-executor.service"
+SCAN_UNIT="shares-alpaca-fvg-scanner.service"
+
+if systemctl --user is-active --quiet "$EXEC_UNIT" 2>/dev/null; then
+    echo "stopping lingering FVG executor unit $EXEC_UNIT at end of session" >> "$REPO_DIR/executor.log"
+    systemctl --user stop "$EXEC_UNIT" >> "$REPO_DIR/executor.log" 2>&1 || true
+fi
+# The scanner exits by itself at 14:00 ET, but stop it too in case it is
+# wedged — it must never be left writing signals.json overnight.
+if systemctl --user is-active --quiet "$SCAN_UNIT" 2>/dev/null; then
+    echo "stopping lingering FVG scanner unit $SCAN_UNIT at end of session" >> "$REPO_DIR/executor.log"
+    systemctl --user stop "$SCAN_UNIT" >> "$REPO_DIR/executor.log" 2>&1 || true
 fi
 
-# Also stop the scanner if it is somehow still running (it exits by
-# itself at 14:00 ET, but a wedged scanner would otherwise regenerate
-# signals.json against a closed market).
-if systemctl --user is-active --quiet shares-alpaca-fvg-scanner.service 2>/dev/null; then
-    echo "stopping FVG scanner unit at end of session" >> "$REPO_DIR/executor.log"
-    systemctl --user stop shares-alpaca-fvg-scanner.service >> "$REPO_DIR/executor.log" 2>&1
+if [ -f "$REPO_DIR/executor.pid" ]; then
+    PID="$(cat "$REPO_DIR/executor.pid" 2>/dev/null || true)"
+    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        CMD="$(ps -o args= -p "$PID" 2>/dev/null || true)"
+        case "$CMD" in
+            *run_fvg_paper.py*)
+                echo "stopping lingering FVG executor PID $PID at end of session" >> "$REPO_DIR/executor.log"
+                kill "$PID" 2>/dev/null || true
+                sleep 2
+                kill -9 "$PID" 2>/dev/null || true
+                ;;
+        esac
+    fi
+    rm -f "$REPO_DIR/executor.pid"
 fi
-
-rm -f "$REPO_DIR/executor.pid" "$REPO_DIR/fvg_scanner.pid"
 
 "$VENV_PY" "$SCRIPT_DIR/fvg_pnl_report.py" 2>&1 | tee -a "$REPO_DIR/executor.log"
 

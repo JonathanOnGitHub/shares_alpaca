@@ -1,0 +1,55 @@
+[Unit]
+Description=Shares Alpaca intraday FVG paper executor
+Documentation=file:///home/burley/Personal/Trading/Shares_alpaca/scripts/fvg_daily_wrapper.sh
+After=network-online.target
+Wants=network-online.target
+
+# WHY THIS IS A SEPARATE UNIT:
+# The FVG executor used to be started by the Hermes cron job via
+# `setsid`. setsid detaches a process from its terminal and session, but
+# NOT from the systemd cgroup it was launched in, so the executor stayed
+# inside hermes-gateway.service's cgroup. When the kernel OOM killer hit
+# the gateway (7.4G peak on 28 and 29 Oct), systemd tore the whole cgroup
+# down with SIGKILL and the executor died with it — mid-session, losing
+# its open positions and its trade log.
+#
+# A dedicated unit puts the executor in its own cgroup, so an OOM kill or
+# a gateway restart leaves it running.
+#
+# The scanner (shares-alpaca-fvg-scanner.service) is a SEPARATE unit
+# because it regenerates signals.json every 5 minutes during the
+# session while this executor consumes that file.
+
+[Service]
+Type=simple
+WorkingDirectory=/home/burley/Personal/Trading/Shares_alpaca
+ExecStart=/home/burley/Personal/Trading/Shares_alpaca/.venv/bin/python /home/burley/Personal/Trading/Shares_alpaca/scripts/run_fvg_paper.py --executor-only
+Environment=PYTHONUNBUFFERED=1
+# on-failure, NOT always: this executor runs with close_mode="intraday",
+# so PaperExecutor.run() EXITS NORMALLY at 16:05 ET once the session is
+# over — that is the documented, intended behaviour of the intraday
+# strategy (it must be flat by 14:00 ET and must not linger overnight).
+# Restart=always would restart it, it would exit again immediately, and
+# the unit would hot-loop all afternoon. on-failure restarts it only if
+# it CRASHES.
+#
+# The engulfing unit uses Restart=always because that executor uses
+# close_mode="overnight" and therefore NEVER self-exits — it waits for
+# the next session's open. The two strategies need different policies.
+Restart=on-failure
+RestartSec=15
+# control-group, so any child of the executor dies with it rather than
+# being left behind holding broker state.
+KillMode=control-group
+KillSignal=SIGTERM
+# The executor handles SIGTERM by finishing the poll cycle, flattening
+# its own positions and writing the trade log.
+TimeoutStopSec=60
+# A hard ceiling so this unit can never be the victim of the global OOM
+# killer. The executor sits at ~85 MB; 1G is generous.
+MemoryMax=1G
+StandardOutput=append:/home/burley/Personal/Trading/Shares_alpaca/executor.log
+StandardError=append:/home/burley/Personal/Trading/Shares_alpaca/executor.log
+
+[Install]
+WantedBy=default.target

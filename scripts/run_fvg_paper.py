@@ -36,6 +36,7 @@ the whole yfinance universe into the executor's memory.
 import argparse
 import json
 import logging
+import signal
 import sys
 import time
 from datetime import datetime
@@ -104,6 +105,19 @@ def run_executor(args, signals=None):
         strategy="fvg",
         close_mode="intraday",
     )
+
+    # systemd stops the service with SIGTERM, so the daemon has to handle
+    # it. Without a handler, SIGTERM kills the process outright and the
+    # trade log and open positions are lost — the same failure the
+    # setsid daemon had whenever the gateway's cgroup was torn down.
+    # executor.run() already calls _close_all() and _write_log() on exit.
+    def _sig_handler(signum, frame):
+        print(f"[run_fvg_paper] Signal {signum} received — shutting down.")
+        executor.stop()
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
     try:
         executor.run()
     except KeyboardInterrupt:
@@ -139,14 +153,13 @@ def poll_loop(args):
 def main():
     parser = argparse.ArgumentParser(description="Intraday FVG signal generator + Alpaca paper executor")
     parser.add_argument("--signals-only", action="store_true", help="Only generate signals, don't run executor")
+    parser.add_argument("--executor-only", action="store_true",
+                        help="Executor only, no signal generation (for the systemd unit)")
     parser.add_argument("--once", action="store_true", help="Single signal scan, then exit")
     parser.add_argument("--poll", action="store_true", help="Rescan for signals throughout the session")
     parser.add_argument("--poll-seconds", type=int, default=300, help="Seconds between rescans (default 300)")
     parser.add_argument("--until-et", type=int, default=840, help="Stop scanning after this minute-of-day ET (default 840 = 14:00)")
     parser.add_argument("--days", type=int, default=5, help="Days of 5-min history to fetch (default 5)")
-    parser.add_argument("--executor-only", action="store_true",
-                        help="Run ONLY the executor daemon; do not generate signals. "
-                             "The scanner unit owns signal generation.")
     args = parser.parse_args()
 
     if args.executor_only:
@@ -171,6 +184,15 @@ def main():
                   f"second scanner.")
             return
         poll_loop(args)
+        return
+
+    # --executor-only is for the systemd unit. The scanner owns signal
+    # generation for the intraday strategy, so the executor must NOT
+    # regenerate them: doing so would overwrite signals.json mid-session
+    # while the executor is reading it, and would also load the whole
+    # yfinance universe into a second long-lived process.
+    if args.executor_only:
+        run_executor(args)
         return
 
     signals = run_signals(args)
